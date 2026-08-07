@@ -1,0 +1,78 @@
+/* 백테스트 실험실 전용 스타일. styles.css 의 토큰(--primary·--green 등)을 그대로 씁니다. */
+
+.lab-head h1 { font-size: 1.5rem; margin: 0 0 8px; display: flex; align-items: center; gap: 10px; }
+.lab-head h1 i { color: var(--primary); }
+.lab-lead { color: var(--text-muted); margin: 0 0 10px; font-size: .92rem; line-height: 1.65; }
+.lab-warn {
+  background: var(--yellow-bg); border: 1px solid #fde68a; color: #854d0e;
+  border-radius: var(--radius-sm); padding: 10px 14px; font-size: .85rem; margin: 0 0 20px;
+}
+.lab-warn i { margin-right: 6px; }
+
+.lab-form { padding: 20px; margin-bottom: 22px; }
+.lab-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px 16px;
+}
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field > span { font-size: .8rem; font-weight: 600; color: var(--text-muted); }
+.field input, .field select {
+  padding: 8px 10px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text); font-size: .9rem; font-family: inherit; width: 100%;
+}
+.field input:focus, .field select:focus { outline: none; border-color: var(--primary); }
+.field small { font-size: .72rem; color: var(--text-subtle); }
+.field code { background: var(--surface-soft); padding: 1px 4px; border-radius: 3px; }
+
+.lab-actions { display: flex; align-items: center; gap: 10px; margin-top: 18px; flex-wrap: wrap; }
+.lab-status { font-size: .84rem; color: var(--text-muted); }
+.lab-status.error { color: var(--red); }
+.lab-status.ok { color: var(--green); }
+
+.lab-banner { border-radius: var(--radius); padding: 14px 18px; margin: 0 0 18px; border: 1px solid; }
+.lab-banner strong { display: block; font-size: 1rem; margin-bottom: 3px; }
+.lab-banner .detail { font-size: .84rem; opacity: .9; }
+.lab-banner.good { background: var(--green-bg); border-color: #6ee7b7; color: #065f46; }
+.lab-banner.warn { background: var(--yellow-bg); border-color: #fde68a; color: #854d0e; }
+.lab-banner.bad  { background: var(--red-bg);   border-color: #fca5a5; color: #991b1b; }
+
+.lab-result h2 {
+  font-size: 1.12rem; margin: 30px 0 10px; padding-top: 18px; border-top: 1px solid var(--border);
+}
+.lab-result h3 { font-size: .95rem; margin: 20px 0 8px; color: var(--text-muted); }
+
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.stat {
+  background: var(--surface-soft); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 12px 14px;
+}
+.stat .k { font-size: .74rem; color: var(--text-subtle); display: block; margin-bottom: 5px; }
+.stat .v { font-size: 1.25rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.stat .f { font-size: .72rem; color: var(--text-subtle); margin-top: 3px; }
+.stat .v.good { color: var(--green); }
+.stat .v.bad  { color: var(--red); }
+
+.lab-chart { overflow-x: auto; margin: 10px 0; }
+.lab-chart svg { display: block; width: 100%; min-width: 560px; height: auto; }
+.lab-chart svg .grid { stroke: var(--border); stroke-width: 1; }
+.lab-chart svg .tick { fill: var(--text-subtle); font-size: 11px; }
+.lab-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: .8rem; color: var(--text-muted); margin-bottom: 6px; }
+.lab-legend span { display: flex; align-items: center; gap: 6px; }
+.lab-legend i { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+
+.lab-table-wrap { overflow-x: auto; margin: 10px 0; }
+.lab-table { border-collapse: collapse; width: 100%; font-size: .85rem; min-width: 480px; }
+.lab-table th, .lab-table td {
+  padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: right;
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.lab-table th:first-child, .lab-table td:first-child { text-align: left; }
+.lab-table thead th { background: var(--surface-soft); color: var(--text-muted); font-weight: 600; font-size: .78rem; }
+.lab-table td.good { color: var(--green); }
+.lab-table td.bad  { color: var(--red); }
+
+.lab-note { font-size: .8rem; color: var(--text-subtle); line-height: 1.65; margin: 8px 0; }
+
+@media (max-width: 640px) {
+  .lab-grid { grid-template-columns: 1fr 1fr; }
+  .lab-actions { flex-direction: column; align-items: stretch; }
+}

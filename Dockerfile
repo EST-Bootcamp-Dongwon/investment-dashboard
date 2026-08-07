@@ -18,6 +18,8 @@ COPY app/ ./app/
 RUN mkdir -p app/frontend/vendor \
     && python -c "import pathlib, urllib.request; pathlib.Path('app/frontend/vendor/mermaid.min.js').write_bytes(urllib.request.urlopen('https://cdn.jsdelivr.net/npm/mermaid@11.16.0/dist/mermaid.min.js', timeout=90).read())" \
     && test -s app/frontend/vendor/mermaid.min.js
+# 백테스트 실험실 라우터가 import 하는 예측 코어. LEAN 컨테이너와 같은 파일을 씁니다.
+COPY lean-hyundai/hd_core.py lean-hyundai/download_price_data.py lean-hyundai/make_report.py ./lean-hyundai/
 COPY docs/ ./docs/
 COPY scripts/upload_docs_to_qdrant.sh ./scripts/upload_docs_to_qdrant.sh
 COPY scripts/build_sidebar_partial.py ./scripts/build_sidebar_partial.py

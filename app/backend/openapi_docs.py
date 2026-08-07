@@ -64,6 +64,9 @@ FRONTEND_API_PATHS = frozenset({
     "/api/tax/upload",
     "/api/tax/sample",
     "/api/tax/simulate",
+    "/api/backtest-lab/config",
+    "/api/backtest-lab/run",
+    "/api/backtest-lab/report",
 })
 
 
@@ -92,6 +95,9 @@ OPERATION_DOCS: dict[str, tuple[str, str, str]] = {
     "/api/home/market-candle": ("산업·시장", "홈 화면 시장 캔들", "홈 대시보드에 표시할 대표 시장의 OHLCV 캔들 데이터를 반환합니다."),
     "/api/home/kospi-candle": ("산업·시장", "KOSPI 캔들", "KOSPI 지수의 홈 화면용 OHLCV 캔들 데이터를 반환합니다."),
     "/api/home/box-range": ("산업·시장", "가격 박스권 데이터", "홈 화면 기술적 분석 예시에 사용할 가격 범위·OHLCV·현재 위치 데이터를 반환합니다. 실제 매매 신호가 아닙니다."),
+    "/api/backtest-lab/config": ("퀀트", "백테스트 실험실 기본값", "실험 화면이 처음 뜰 때 쓰는 종목 프리셋, 기본 구간·비용, 오늘 날짜를 반환합니다. `available: false`면 예측 모듈을 불러오지 못한 상태이고 `import_error`에 원인이 담깁니다."),
+    "/api/backtest-lab/run": ("퀀트", "워크포워드 예측 검증", "학습 구간으로 모델을 적합해 검증 구간을 out-of-sample 로 예측하고, 예측 정확도(방향 적중률·MAE·랜덤워크 대비 R²)와 그 신호로 매매했을 때의 성과를 함께 반환합니다. 검증 구간은 학습 구간보다 뒤이면서 오늘 이전이어야 하며, 아니면 400을 반환합니다. 성과는 벡터화 근사치이고 정본은 LEAN 엔진 실행 결과입니다."),
+    "/api/backtest-lab/report": ("퀀트", "검증 리포트 HTML 생성", "`/api/backtest-lab/run`과 같은 계산을 수행한 뒤 결과를 자체완결 HTML 리포트로 만들어 본문째 반환합니다. 외부 리소스를 참조하지 않으므로 파일 하나만으로 열립니다. 서버의 `app/generated/backtest-lab/`에도 사본을 남깁니다."),
     "/api/quant/backtest": ("퀀트", "이동평균 전략 백테스트", "합성 가격 시계열에서 단기·장기 이동평균 교차 전략을 실행합니다. 수익률, Sharpe, MDD, 거래 수와 base64 차트를 반환하며 실투자 성과를 보장하지 않습니다."),
     "/api/quant/portfolio": ("퀀트", "몬테카를로 포트폴리오", "무작위 비중 포트폴리오를 생성해 수익률·변동성·Sharpe 기준의 효율적 조합과 차트를 반환합니다."),
     "/api/quant/financial-knowledge": ("퀀트", "금융지식 포트폴리오 실습", "학습 초점에 맞춘 자산배분·상품 설명과 몬테카를로 결과를 반환합니다."),

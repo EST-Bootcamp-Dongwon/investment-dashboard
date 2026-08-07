@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>백테스트 실험실 — EDUMGT</title>
+  <link rel="preload" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+  <link rel="stylesheet" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link rel="stylesheet" href="../styles.css?v=10" />
+  <link rel="stylesheet" href="resource-pages.css" />
+  <link rel="stylesheet" href="backtest-lab.css?v=1" />
+</head>
+<body data-page="backtest-lab">
+
+  <div id="overlay" class="overlay" onclick="closeSidebar()"></div>
+
+  <header class="topbar">
+    <button id="sidebar-toggle" class="topbar-toggle" type="button" onclick="toggleSidebar()"
+      aria-label="메뉴 열기" aria-controls="sidebar" aria-expanded="true">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+
+    <a class="brand" href="../index.html" aria-label="대시보드로 이동">
+      <span class="brand-mark">
+        <svg width="18" height="18" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+          <rect x="1" y="10" width="3" height="9" rx="1" fill="#fff" opacity=".6"/>
+          <rect x="6" y="6"  width="3" height="13" rx="1" fill="#fff" opacity=".8"/>
+          <rect x="11" y="2" width="3" height="17" rx="1" fill="#fff"/>
+          <polyline points="1,10 6.5,6.5 11.5,2.5 16,5" stroke="#a5f3fc" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <circle cx="16" cy="5" r="1.5" fill="#a5f3fc"/>
+        </svg>
+      </span>
+      <span class="brand-text">
+        <span class="brand-name">EDUMGT</span>
+        <small class="brand-sub">주식상식 웹앱</small>
+      </span>
+    </a>
+  </header>
+
+  <div class="layout">
+    <aside id="sidebar" class="sidebar" aria-label="메인 메뉴">
+      <div id="sidebar-nav-slot"></div>
+    </aside>
+
+    <div class="content-wrap">
+      <main class="content-main">
+        <section class="app-surface">
+
+          <div class="lab-head">
+            <h1><i class="fa-solid fa-flask"></i> 백테스트 실험실</h1>
+            <p class="lab-lead">
+              과거 한 구간으로 모델을 학습시키고, <strong>그 뒤 구간</strong>을 out-of-sample 로 예측해
+              얼마나 맞았는지 · 그대로 매매하면 수익이 났는지를 한 번에 확인합니다.
+            </p>
+            <p class="lab-warn">
+              <i class="fa-solid fa-triangle-exclamation"></i>
+              학습·연구용입니다. 여기 나오는 수치를 투자 판단의 근거로 쓰지 마세요.
+              체결·세금·거래일 가정이 실제와 다릅니다.
+            </p>
+          </div>
+
+          <form id="lab-form" class="lab-form card">
+            <div class="lab-grid">
+              <label class="field">
+                <span>종목 프리셋</span>
+                <select id="preset"><option value="">직접 입력</option></select>
+              </label>
+              <label class="field">
+                <span>Yahoo 티커</span>
+                <input id="ticker" type="text" value="005380.KS" required maxlength="24" />
+                <small>한국 종목은 <code>종목코드.KS</code> (코스닥은 <code>.KQ</code>)</small>
+              </label>
+              <label class="field">
+                <span>표시 이름</span>
+                <input id="name" type="text" value="현대차" maxlength="40" />
+              </label>
+
+              <label class="field">
+                <span>학습 시작</span>
+                <input id="train_start" type="date" value="2025-01-01" required />
+              </label>
+              <label class="field">
+                <span>학습 종료</span>
+                <input id="train_end" type="date" value="2025-12-31" required />
+              </label>
+              <label class="field">
+                <span>검증 시작</span>
+                <input id="test_start" type="date" value="2026-01-01" required />
+                <small>학습 종료일보다 뒤여야 합니다</small>
+              </label>
+              <label class="field">
+                <span>검증 종료</span>
+                <input id="test_end" type="date" value="2026-06-30" required />
+                <small>오늘 이전이어야 실제값과 비교됩니다</small>
+              </label>
+
+              <label class="field">
+                <span>초기 자본 (원)</span>
+                <input id="initial_cash" type="number" value="100000000" min="1000000" step="1000000" required />
+              </label>
+              <label class="field">
+                <span>수수료 (%, 편도)</span>
+                <input id="commission_rate" type="number" value="0.015" min="0" max="2" step="0.001" required />
+              </label>
+              <label class="field">
+                <span>매도세 (%)</span>
+                <input id="sell_tax_rate" type="number" value="0.15" min="0" max="2" step="0.01" required />
+                <small>2025년 이후 코스피 기준 가정</small>
+              </label>
+              <label class="field">
+                <span>슬리피지 (%, 편도)</span>
+                <input id="slippage_rate" type="number" value="0.05" min="0" max="2" step="0.01" required />
+              </label>
+            </div>
+
+            <div class="lab-actions">
+              <button type="submit" class="btn btn-primary" id="run-btn">
+                <i class="fa-solid fa-play"></i> 실행
+              </button>
+              <button type="button" class="btn btn-secondary" id="report-btn" disabled>
+                <i class="fa-solid fa-file-arrow-down"></i> 리포트 내보내기
+              </button>
+              <span id="lab-status" class="lab-status"></span>
+            </div>
+          </form>
+
+          <div id="lab-result" class="lab-result" hidden></div>
+
+        </section>
+      </main>
+
+      <footer class="site-footer">
+        <span class="footer-logo">EDUMGT</span>
+        <span class="footer-line">주식상식 웹앱 · (주)에듀엠지티 · 학습·연구용 산출물이며 투자 자문이 아닙니다 · © 2025</span>
+      </footer>
+    </div>
+  </div>
+
+  <script src="../js/sidebarUI.js?v=2"></script>
+  <script src="../js/includeSidebar.js?v=1"></script>
+  <script type="module" src="../js/pages/backtest-lab.js?v=1"></script>
+</body>
+</html>

@@ -14,8 +14,11 @@ ROOT = Path(__file__).resolve().parents[1]
 INDEX_HTML = ROOT / "app" / "frontend" / "index.html"
 PARTIAL_OUT = ROOT / "app" / "frontend" / "pages" / "partials" / "sidebar-nav.html"
 
-# 외부 자료 메뉴는 학습 문서 안의 링크로 통합했다.
-EXTERNAL_PAGES: dict[str, str] = {}
+# index.html 이 "pages/xxx.html" 로 거는 정적 페이지 링크.
+# partial 은 pages/ 안에서 쓰이므로 상대경로를 파일명만으로 바꾸고 data-page 를 붙인다.
+EXTERNAL_PAGES: dict[str, str] = {
+    "backtest-lab.html": "backtest-lab",
+}
 
 
 def add_href(match: re.Match) -> str:

@@ -124,6 +124,12 @@
         <a class="nav-item" data-view="rag-chat">
           <i class="fa-solid fa-comments"></i><span>문서 검색 채팅</span>
         </a>
+        <!-- 정적 페이지라 data-view 대신 href 로 이동한다.
+             partial 생성 시 scripts/build_sidebar_partial.py 의 EXTERNAL_PAGES 가
+             pages/ 내부 기준 상대경로로 바꿔준다. -->
+        <a class="nav-item" href="pages/backtest-lab.html">
+          <i class="fa-solid fa-flask"></i><span>백테스트 실험실</span>
+        </a>
 
       </nav>
     </aside>

@@ -106,13 +106,16 @@ try:
     from .routers.quant import router as quant_router
     from .routers.tax import router as tax_router
     from .routers.rag import router as rag_router
+    from .routers.backtest_lab import router as backtest_lab_router
 except ImportError:  # Allows `uvicorn main:app` from app/backend.
     from routers.ml import router as ml_router  # type: ignore
     from routers.quant import router as quant_router  # type: ignore
     from routers.tax import router as tax_router  # type: ignore
     from routers.rag import router as rag_router  # type: ignore
+    from routers.backtest_lab import router as backtest_lab_router  # type: ignore
 app.include_router(ml_router)
 app.include_router(quant_router)
+app.include_router(backtest_lab_router)
 # Routers registered below are also included before the schema is first requested;
 # the OpenAPI factory is installed at the bottom of this module.
 

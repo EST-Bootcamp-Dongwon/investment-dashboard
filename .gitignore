@@ -23,6 +23,14 @@ app/frontend/vendor/
 # LEAN 백테스트 실행 결과. 실행할 때마다 타임스탬프 파일이 쌓이고
 # `docker compose -f docker-compose.lean.yml run --rm samsung-backtest` 로 언제든 다시 만든다.
 lean-results/
+lean-results-old/
+
+# 현대차 예측 백테스트 산출물(시세 CSV · 신호 CSV · LEAN 결과 · report.html).
+# `docker compose -f docker-compose.hd.yaml run --rm hd-backtest` 로 언제든 다시 만든다.
+lean-hyundai-results/
+
+# LEAN CLI 워크스페이스(lean.json · data/ · 프로젝트). data/ 만 226MB 라 커밋하지 않는다.
+lean-cli/
 
 # ── 데이터 원본 ────────────────────────────────────────
 # 교재·강의자료·데이터 원본은 커밋하지 않는다 (AGENTS.md 규칙).
