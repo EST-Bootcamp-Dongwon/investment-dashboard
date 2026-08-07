@@ -1,0 +1,22 @@
+fastapi
+uvicorn[standard]
+orjson
+python-multipart
+python-dotenv
+
+# 데이터·시장 조회와 차트 생성
+numpy
+pandas
+openpyxl
+yfinance
+pykrx
+matplotlib
+
+# 백엔드 라우터의 분석·이미지 처리 기능
+scikit-learn
+torch
+diffusers
+# 원본은 opencv-python(GUI 빌드)이었는데, python:3.12-slim 에는 libxcb.so.1 이 없어
+# `import cv2` 자체가 ImportError 로 실패했다(=/api/cv/circle-animation 이 항상 500).
+# 이 앱은 VideoWriter·circle 만 쓰고 창을 띄우지 않으므로 headless 빌드가 맞다.
+opencv-python-headless

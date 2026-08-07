@@ -1,0 +1,67 @@
+name: investment-portfolio-site
+
+# 로컬 PC 실행용 구성입니다.
+# 운영 서버는 docker-compose.prod.yml을 사용합니다.
+#
+# 강사님 원본에 있던 MongoDB(mongo)와 퀴즈 시드(quiz-init)는 퀴즈·단어장 시험
+# 기능 전용이었으므로 이 프로젝트에서는 제거했습니다. 남은 상태 저장소는
+# 문서 검색(RAG)용 Qdrant 하나뿐입니다.
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: portfolio_backend
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-investment_docs}
+      RAG_LLM_BASE_URL: ${RAG_LLM_BASE_URL:-https://api.openai.com/v1}
+      RAG_LLM_API_KEY: ${RAG_LLM_API_KEY:-}
+      RAG_LLM_MODEL: ${RAG_LLM_MODEL:-}
+      DART_API_KEY: ${DART_API_KEY:-}
+      KOSIS_API_KEY: ${KOSIS_API_KEY:-}
+      BOK_API_KEY: ${BOK_API_KEY:-}
+    volumes:
+      - ./docs:/app/docs:ro
+    depends_on:
+      qdrant:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  qdrant:
+    image: qdrant/qdrant:v1.13.4
+    container_name: portfolio_qdrant
+    restart: unless-stopped
+    ports:
+      - "${QDRANT_PORT:-6333}:6333"
+      - "${QDRANT_GRPC_PORT:-6334}:6334"
+    volumes:
+      - portfolio_qdrant_data:/qdrant/storage
+
+  # 문서를 변경한 뒤 `docker compose --profile tools run --rm docs-index`로 실행합니다.
+  docs-index:
+    profiles: ["tools"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: "no"
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_COLLECTION: ${QDRANT_COLLECTION:-investment_docs}
+    volumes:
+      - ./docs:/app/docs:ro
+    depends_on:
+      qdrant:
+        condition: service_started
+    command: ["/app/scripts/upload_docs_to_qdrant.sh"]
+
+volumes:
+  portfolio_qdrant_data:

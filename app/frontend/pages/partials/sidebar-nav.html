@@ -1,0 +1,32 @@
+<nav class="sidebar-nav">
+
+        <!-- 대시보드 -->
+        <a href="../index.html?view=home" class="nav-item nav-home" data-view="home">
+          <i class="fa-solid fa-house"></i><span>대시보드</span>
+        </a>
+        <!-- ─────── 데이터 시각화 ─────── -->
+        <div class="nav-section">
+          <button class="nav-section-hdr" onclick="toggleNav('visualization')">
+            <span><i class="fa-solid fa-chart-pie"></i>데이터 시각화</span>
+            <i class="fa-solid fa-chevron-down nav-chev" id="chev-visualization"></i>
+          </button>
+          <div class="nav-children" id="nav-visualization">
+            <a href="../index.html?view=server-resources" class="nav-item" data-view="server-resources"><i class="fa-solid fa-server"></i>서버 리소스</a>
+            <a href="../index.html?view=world-markets" class="nav-item" data-view="world-markets"><i class="fa-solid fa-earth-americas"></i>세계증시현황</a>
+            <a href="../index.html?view=volume-cloud" class="nav-item" data-view="volume-cloud"><i class="fa-solid fa-cloud"></i>거래량 클라우드</a>
+          </div>
+        </div>
+        <a href="../index.html?view=portfolio-combination" class="nav-item" data-view="portfolio-combination">
+          <i class="fa-solid fa-traffic-light"></i><span>포트폴리오 조합</span>
+        </a>
+        <a href="../index.html?view=portfolio-guide" class="nav-item" data-view="portfolio-guide">
+          <i class="fa-solid fa-compass"></i><span>포트폴리오 추천</span>
+        </a>
+        <a href="../index.html?view=portfolio-simulation" class="nav-item" data-view="portfolio-simulation">
+          <i class="fa-solid fa-chart-area"></i><span>포트폴리오 시뮬레이션</span>
+        </a>
+        <a href="../index.html?view=rag-chat" class="nav-item" data-view="rag-chat">
+          <i class="fa-solid fa-comments"></i><span>문서 검색 채팅</span>
+        </a>
+
+      </nav>

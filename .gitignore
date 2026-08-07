@@ -1,0 +1,45 @@
+# ── 파이썬 ──────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+/venv
+/.venv
+.venv/
+
+# ── 시크릿 ─────────────────────────────────────────────
+# 이 저장소는 Public 이다. API 키가 절대 커밋되지 않게 한다.
+.env
+*.env
+!.env.example
+*.key
+*.pem
+
+# ── 실행 산출물 ────────────────────────────────────────
+*.log
+app/generated/
+
+# Docker 빌드 때 CDN 에서 받아 넣는다 (Dockerfile 참고)
+app/frontend/vendor/
+
+# LEAN 백테스트 실행 결과. 실행할 때마다 타임스탬프 파일이 쌓이고
+# `docker compose -f docker-compose.lean.yml run --rm samsung-backtest` 로 언제든 다시 만든다.
+lean-results/
+
+# ── 데이터 원본 ────────────────────────────────────────
+# 교재·강의자료·데이터 원본은 커밋하지 않는다 (AGENTS.md 규칙).
+# 앞의 `/` 는 저장소 루트만 가리킨다. 이게 없으면 app/frontend/js/data/ 처럼
+# 코드가 쓰는 하위 폴더까지 함께 제외된다.
+/DATA-ROOT/
+/data/
+*.csv
+*.xlsx
+*.zip
+*.pdf
+
+# ── 프로젝트 문서 (Obsidian Vault 와 미러링) ───────────
+/docs-spec/
+
+# ── 에디터·OS ──────────────────────────────────────────
+.claude/
+.DS_Store
+Thumbs.db
+play**/
