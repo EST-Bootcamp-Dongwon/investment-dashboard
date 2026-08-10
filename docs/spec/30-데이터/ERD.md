@@ -1,9 +1,9 @@
 # ERD — 개체 관계도
 
-> - **버전**: v2.0
-> - **최종 수정**: 2026-08-09 (KST)
+> - **버전**: v2.1
+> - **최종 수정**: 2026-08-10 (KST)
 > - **상태**: 초안
-> - **기준 코드**: `main` @ `c3d737e`
+> - **기준 코드**: `main` @ `718f161`
 > - **DB**: Supabase(Postgres) — [CN-001](../00-index/변경이력.md#cn-001) 확정
 > - **역할**: 저장할 개체와 관계를 정의한다. 컬럼 타입·제약의 전문은
 >   [`테이블-정의서.md`](테이블-정의서.md) 에 있다.
@@ -63,6 +63,8 @@ erDiagram
 
     recommendation ||--|{ recommendation_item : "자산 배분 라인"
     simulation_run ||--|{ simulation_point : "연도별 백분위"
+
+    macro_series ||--o{ macro_observation : "날짜별 관측치"
 
     auth_users {
         uuid id PK "Supabase Auth 관리"
@@ -170,10 +172,32 @@ erDiagram
         vector embedding "768차원"
         timestamptz indexed_at
     }
+
+    macro_series {
+        smallint id PK
+        text code UK "KR_BASE_RATE 등"
+        text name_ko
+        text source "ecos/kosis/fred"
+        text source_table "722Y001 등"
+        text source_item "0101000 등"
+        text frequency "daily/monthly/…"
+        text unit
+        date available_from
+        boolean is_active
+        timestamptz updated_at
+    }
+
+    macro_observation {
+        smallint series_id PK "FK · 복합 PK"
+        date obs_date PK "복합 PK"
+        numeric value
+        timestamptz ingested_at
+    }
 ```
 
-> `doc_chunk` 는 다른 테이블과 **외래키 관계가 없습니다.** 사용자 데이터가 아니라
-> `docs/*.md` 를 색인한 지식 베이스이기 때문입니다. 자세한 근거는 4절.
+> `doc_chunk` 와 거시지표 2종은 다른 테이블과 **외래키 관계가 없습니다.**
+> 사용자 데이터가 아니라 **참조 데이터**이기 때문입니다 —
+> `doc_chunk` 는 `docs/*.md` 색인(4절), 거시지표는 ECOS·FRED 공개 통계(5절)입니다.
 
 ---
 
@@ -351,7 +375,59 @@ Supabase Edge Runtime 에 내장돼 있어 가장 싸고 편했지만
 
 ---
 
-## 5. 관계 규칙 요약
+## 5. 거시지표 2종 — 참조 데이터의 두 번째 사례
+
+### 5.1 결정
+
+[CN-044](../00-index/변경이력.md#cn-044) 가 "거시지표를 DB 에 넣는다" 까지 정하고
+테이블 정의를 세션 9로 미뤘습니다. **여기서 마무리합니다.**
+컬럼·제약의 전문은 [`테이블-정의서.md` 4.8절](테이블-정의서.md#48-macro_series--macro_observation--거시지표-참조-데이터).
+
+### 5.2 이것은 0.1 원칙의 위반이 아닙니다
+
+0.1 은 **"시세 원본"** 을 넣지 않는다는 원칙이고, 거시지표는 시세가 아닙니다.
+**두 축으로 갈립니다.**
+
+| | 시세 (넣지 않음) | 거시지표 (넣음) |
+| --- | --- | --- |
+| 성격 | 시장이 실시간으로 만드는 값 | **기관이 발표하는 공식 통계** |
+| 재조회 | yfinance·pykrx 무인증 · 무료 | **인증 키 · 쿼터 소모** |
+| 갱신 | 초·분 | 일·월 |
+| 행 수 | 수백만 | **1.7만** |
+
+**결정적인 것은 세 번째 열이 아니라 두 번째 열입니다.** 시세는 다시 부르면 그만이라
+저장할 이유가 없지만, 거시지표는 **화면 진입마다 부르면 쿼터를 태웁니다.**
+그리고 ECOS·KOSIS·FRED·KRX 의 일일 한도는 아직 **(확인 필요)** 라
+([`../20-기능명세/04-거시경제.md` 4.4절](../20-기능명세/04-거시경제.md#44-쿼터--여전히-미확인)),
+**한도를 모르는 채로 호출량을 늘리지 않는 쪽**이 안전합니다.
+
+이미 같은 판단을 한 번 했습니다 — [CN-023](../00-index/변경이력.md#cn-023) 의
+DART 회사 마스터입니다. **"갱신이 드문 참조 데이터는 넣는다"** 가 C-04 의 예외 규칙이고,
+거시지표가 두 번째 사례입니다.
+
+### 5.3 마스터와 관측치를 나눈 이유
+
+`macro_series` (지표가 무엇인가) ↔ `macro_observation` (그 값이 날짜별로 얼마인가).
+
+지표의 **출처 좌표**(ECOS 통계표 `722Y001` · 항목 `0101000`)와 **단위·주기**는
+지표당 한 번 정해지고 거의 바뀌지 않습니다. 합치면 그 문자열이 관측치 1.7만 행에
+복제되고, **출처 코드가 바뀔 때 1.7만 행을 갱신**해야 합니다.
+
+> `macro_observation` 은 이 ERD 에서 **유일하게 복합 기본키**를 씁니다.
+> `(series_id, obs_date)` 가 자연키이고 대리키가 보태는 것이 없기 때문입니다.
+> 명명 규칙("기본키는 `id`")을 어기는 의도된 예외이며, 근거는
+> [`테이블-정의서.md` 4.8절](테이블-정의서.md#48-macro_series--macro_observation--거시지표-참조-데이터)에 적었습니다.
+
+### 5.4 사용자 데이터와 섞이지 않습니다
+
+`macro_series` · `macro_observation` 은 `app_user` 와 **관계가 없습니다.**
+누가 조회했는지 남기지 않고, 배치가 채우고 화면이 읽기만 합니다.
+`doc_chunk` 와 같은 자리이며, RLS 도 같습니다 — **공개 SELECT · 쓰기는 서버 경유만**
+([`테이블-정의서.md` 6.1절](테이블-정의서.md#61-정책-요약)).
+
+---
+
+## 6. 관계 규칙 요약
 
 | 관계 | 카디널리티 | 삭제 규칙 | 이유 |
 | --- | --- | --- | --- |
@@ -359,6 +435,7 @@ Supabase Edge Runtime 에 내장돼 있어 가장 싸고 편했지만
 | `app_user` → 이력 4종 | 1 : 0..N | `ON DELETE SET NULL` | 탈퇴해도 **통계용 익명 이력은 남긴다** |
 | `recommendation` → `recommendation_item` | 1 : 1..N | `ON DELETE CASCADE` | 아이템만 남으면 의미가 없음 |
 | `simulation_run` → `simulation_point` | 1 : 1..N | `ON DELETE CASCADE` | 같음 |
+| `macro_series` → `macro_observation` | 1 : 0..N | `ON DELETE CASCADE` | 지표를 지우면 그 값도 의미가 없음. `0..N` 인 것은 **등록만 하고 아직 적재 전인 계열**이 있을 수 있기 때문 |
 
 > **`SET NULL` 을 고른 것은 판단이 필요한 지점입니다.** 탈퇴자의 이력을 남기면
 > 통계는 좋아지지만 "지워 달라" 는 요청과 충돌합니다. 이 프로젝트는 이력에
@@ -367,7 +444,7 @@ Supabase Edge Runtime 에 내장돼 있어 가장 싸고 편했지만
 
 ---
 
-## 6. 이 문서가 아직 답하지 않은 것
+## 7. 이 문서가 아직 답하지 않은 것
 
 | # | 미결 | 다음 단계 |
 | --- | --- | --- |
@@ -375,6 +452,9 @@ Supabase Edge Runtime 에 내장돼 있어 가장 싸고 편했지만
 | 2 | `gemini-embedding-001` 의 한국어 품질 | 색인 후 "분산투자" ↔ "나누어 담는다" 로 실검색 |
 | 3 | Gemini 무료 티어의 분당·일일 한도 수치 | AI Studio 에서 확인 |
 | 4 | F28 결과를 로그인 사용자만 저장할지 | F28 은 로컬 전용([CN-019](../00-index/변경이력.md#cn-019))이라 저장 주체가 애매함 |
+| 5 | **KOSIS 로 어느 통계표를 쓸지** | 통계표를 실호출로 확정한 뒤 `macro_series` 에 행 추가 (5절) |
+| 6 | **`KR_USD_KRW` 가 영업일인가 달력일인가** | 첫 배치에서 행 수로 확인. 용량 결론은 어느 쪽이든 바뀌지 않음 |
+| 7 | **DART 회사 마스터([CN-023](../00-index/변경이력.md#cn-023))의 테이블 정의** | CN-023 은 "DB 참조 테이블로 영속화" 를 **대응 방향**으로만 적었고 결정이 아직입니다. 거시지표와 같은 예외 규칙에 해당하므로 **결정되면 4.8절 옆에 붙입니다** |
 
 ---
 
@@ -382,5 +462,6 @@ Supabase Edge Runtime 에 내장돼 있어 가장 싸고 편했지만
 
 - [`테이블-정의서.md`](테이블-정의서.md) — 컬럼·타입·제약·인덱스·마이그레이션 SQL
 - [`외부-데이터소스.md`](외부-데이터소스.md) — DART·yfinance·pykrx 출처와 쿼터
+- [`../20-기능명세/04-거시경제.md`](../20-기능명세/04-거시경제.md) — 거시지표를 쓰는 화면(F13·F14)
 - [`../00-index/기능ID-대장.md`](../00-index/기능ID-대장.md) — F03·F04·F05·F27·F28 정의
-- [`../00-index/변경이력.md`](../00-index/변경이력.md) — CN-001 · CN-011 · CN-015 · CN-019
+- [`../00-index/변경이력.md`](../00-index/변경이력.md) — CN-001 · CN-011 · CN-015 · CN-019 · CN-023 · CN-044
