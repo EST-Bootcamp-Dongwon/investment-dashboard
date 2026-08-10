@@ -24,6 +24,10 @@ services:
       DART_API_KEY: ${DART_API_KEY:-}
       KOSIS_API_KEY: ${KOSIS_API_KEY:-}
       BOK_API_KEY: ${BOK_API_KEY:-}
+      # F03 추천 이력 저장·조회. 없으면 preview 만 동작하고 나머지는 503.
+      # service_role 키는 서버 전용이다 — 프론트로 내려가면 RLS 가 무력화된다.
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY:-}
     volumes:
       - ./docs:/app/docs:ro
     depends_on:

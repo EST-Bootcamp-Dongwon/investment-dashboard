@@ -55,6 +55,13 @@ export const api = {
   portfolio:        (body)  => apiFetch('/api/quant/portfolio',            { method: 'POST', body: JSON.stringify(body) }),
   portfolioScenario:(body)  => apiFetch('/api/quant/portfolio-scenario',   { method: 'POST', body: JSON.stringify(body) }),
   portfolioCombination: (body) => apiFetch('/api/market/portfolio-combination', { method: 'POST', body: JSON.stringify(body) }),
+  // F03 포트폴리오 추천. preview 는 저장하지 않으므로 DB 가 죽어도 동작한다.
+  recommendationPreview: (body) => apiFetch('/api/recommendation/preview', { method: 'POST', body: JSON.stringify(body) }),
+  recommendationCreate:  (body) => apiFetch('/api/recommendation/create',  { method: 'POST', body: JSON.stringify(body) }),
+  recommendationHistory: (anonId, limit = 20) =>
+    apiFetch(`/api/recommendation/history?anon_id=${encodeURIComponent(anonId)}&limit=${encodeURIComponent(limit)}`),
+  recommendationDetail:  (id, anonId) =>
+    apiFetch(`/api/recommendation/detail?id=${encodeURIComponent(id)}&anon_id=${encodeURIComponent(anonId)}`),
   risk:             (body)  => apiFetch('/api/quant/risk',                 { method: 'POST', body: JSON.stringify(body) }),
   pipeline:         (body)  => apiFetch('/api/quant/pipeline',             { method: 'POST', body: JSON.stringify(body) }),
   financialKnowledge:(body) => apiFetch('/api/quant/financial-knowledge',   { method: 'POST', body: JSON.stringify(body) }),

@@ -39,14 +39,13 @@ import { companyFinancialView } from './views/companyFinancial.js';
 import { taxAccountingView }         from './views/taxAccounting.js';
 import { dartFinancialAnalysisView } from './views/dartFinancialAnalysis.js';
 import { api }                 from './api.js';
-import { restoreFormState, saveFormState } from './utils/localState.js';
+import { restoreFormState, saveFormState, visitorId } from './utils/localState.js';
 
 const app        = document.getElementById('app');
 const breadcrumb = document.getElementById('breadcrumb');
 const TOPBAR_MARKETS = ['^KS11', '^IXIC', 'KRW=X'];
 const TOPBAR_REFRESH_MS = 30_000;
 const VISITOR_HEARTBEAT_MS = 30_000;
-const VISITOR_ID_KEY = 'investment_analysis_visitor_id';
 
 const routes = {
   'home':              { label: '대시보드',               render: () => homeView(app, navigate) },
@@ -351,21 +350,8 @@ async function refreshTopbarMarkets() {
   }
 }
 
-function visitorId() {
-  const createId = () => {
-    if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID().replaceAll('-', '');
-    return `${Date.now().toString(36)}${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`;
-  };
-  try {
-    const saved = localStorage.getItem(VISITOR_ID_KEY);
-    if (saved) return saved;
-    const id = createId();
-    localStorage.setItem(VISITOR_ID_KEY, id);
-    return id;
-  } catch {
-    return createId();
-  }
-}
+// visitorId 는 utils/localState.js 로 옮겼다. F03 추천 이력의 소유자(anon_id)가
+// 같은 값을 써야 하는데, 뷰가 app.js 를 import 하면 순환 참조가 된다.
 
 async function refreshVisitorCount() {
   const badge = document.getElementById('visitor-count');

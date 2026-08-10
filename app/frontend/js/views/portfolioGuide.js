@@ -1,63 +1,66 @@
-const PROFILES = {
-  stable: {
-    title: '안정 중심 구성', badge: '안정형', color: '#059669',
-    intro: '큰 흔들림을 줄이는 데 우선순위를 둔 예시입니다. 수익 기회도 중요하지만, 예상보다 큰 변동을 견디기 어렵다면 이런 출발점이 편할 수 있습니다.',
-    items: [
-      ['현금성 자산', 35, '#38bdf8', '급한 상황이나 기회를 위한 여유 자금'],
-      ['채권·안정형 자산', 35, '#818cf8', '포트폴리오의 흔들림을 완화하는 역할'],
-      ['글로벌 주식', 20, '#22c55e', '장기 성장 기회를 위한 부분'],
-      ['배당·방어형 주식', 10, '#f59e0b', '상대적으로 안정적인 현금흐름을 기대하는 부분'],
-    ],
-    note: '주가가 빠르게 오를 때에는 성장형 구성보다 수익이 더디게 느껴질 수 있습니다.',
-  },
-  balanced: {
-    title: '균형 중심 구성', badge: '균형형', color: '#0078d4',
-    intro: '성장 기회와 안정성을 함께 고려한 예시입니다. 한 가지 자산에 집중하기보다 서로 다른 역할을 가진 자산을 나누어 담는 데 초점을 둡니다.',
-    items: [
-      ['글로벌 주식', 45, '#22c55e', '여러 국가와 업종의 성장 기회'],
-      ['채권·안정형 자산', 25, '#818cf8', '시장 변동을 완화하는 완충 역할'],
-      ['국내 주식', 15, '#0078d4', '익숙한 시장의 성장 기회'],
-      ['현금성 자산', 10, '#38bdf8', '예상치 못한 지출과 추가 투자 여유'],
-      ['대체 자산', 5, '#f59e0b', '금 등 다른 성격의 자산을 소량 활용'],
-    ],
-    note: '시장 상황에 따라 주식과 안정형 자산이 모두 기대만큼 움직이지 않을 수 있습니다.',
-  },
-  growth: {
-    title: '성장 중심 구성', badge: '성장형', color: '#7c3aed',
-    intro: '장기 성장 가능성에 더 무게를 둔 예시입니다. 단기적인 등락을 감수할 수 있고, 투자 기간이 충분히 길 때 검토해 볼 수 있습니다.',
-    items: [
-      ['글로벌 주식', 60, '#22c55e', '폭넓은 성장 기회를 중심으로 구성'],
-      ['국내 주식', 20, '#0078d4', '국내 시장과 관심 산업에 참여하는 부분'],
-      ['테마·성장 자산', 10, '#a855f7', '높은 변동성을 감수하는 작은 비중'],
-      ['채권·안정형 자산', 5, '#818cf8', '급격한 변동에 대비하는 완충 역할'],
-      ['현금성 자산', 5, '#38bdf8', '기본적인 유동성 확보'],
-    ],
-    note: '짧은 기간에도 큰 손실이 발생할 수 있습니다. 생활에 필요한 돈은 별도로 두는 것이 좋습니다.',
-  },
+import { api } from '../api.js';
+import { visitorId } from '../utils/localState.js';
+
+// 자산 배분표와 판정 규칙은 서버로 옮겼다 (app/backend/services/recommendation.py).
+// 브라우저 안에만 있던 탓에 저장·재현·검증이 불가능했던 것이 F03 의 문제였다.
+//
+// 색상만 여기 남는다. UI 테마의 관심사라 이력에 저장하지 않기로 했고(테이블-정의서 4.3절),
+// 자산명 → 색상이 세 프로필에 걸쳐 모순 없는 함수라 자산명으로 되찾을 수 있다.
+const ASSET_COLORS = {
+  '현금성 자산': '#38bdf8',
+  '채권·안정형 자산': '#818cf8',
+  '글로벌 주식': '#22c55e',
+  '배당·방어형 주식': '#f59e0b',
+  '국내 주식': '#0078d4',
+  '대체 자산': '#f59e0b',
+  '테마·성장 자산': '#a855f7',
 };
 
-function suggestedProfile(risk, horizon) {
-  if (risk === 'low' || horizon === 'short') return 'stable';
-  if (risk === 'high' && horizon === 'long') return 'growth';
-  return 'balanced';
+const PROFILE_COLORS = {
+  stable: '#059669',
+  balanced: '#0078d4',
+  growth: '#7c3aed',
+};
+
+// 배분표에 새 자산이 생겨도 화면이 깨지지 않게 기본값을 준다.
+function assetColor(name) {
+  return ASSET_COLORS[name] ?? '#94a3b8';
 }
 
-function renderProfile(profile) {
-  const config = PROFILES[profile];
-  const blocks = config.items.map(([name, value, color]) => `<span style="width:${value}%;background:${color}" title="${name} ${value}%"></span>`).join('');
-  const rows = config.items.map(([name, value, color, explanation]) => `
-    <li><span class="guide-dot" style="background:${color}"></span><div><b>${name}</b><small>${explanation}</small></div><strong>${value}%</strong></li>`).join('');
+function renderProfile(result) {
+  const items = result.items ?? [];
+  const accent = PROFILE_COLORS[result.profile] ?? '#0078d4';
+  const blocks = items.map((item) => {
+    const color = assetColor(item.asset_name);
+    return `<span style="width:${item.weight_pct}%;background:${color}" title="${item.asset_name} ${item.weight_pct}%"></span>`;
+  }).join('');
+  const rows = items.map((item) => `
+    <li><span class="guide-dot" style="background:${assetColor(item.asset_name)}"></span><div><b>${item.asset_name}</b><small>${item.explanation}</small></div><strong>${item.weight_pct}%</strong></li>`).join('');
   return `
     <section class="portfolio-guide-result">
       <div class="portfolio-guide-result-head">
-        <div><p>추천 구성 예시</p><h2>${config.title} <span style="color:${config.color}">${config.badge}</span></h2></div>
-        <i class="fa-solid fa-compass" style="color:${config.color}"></i>
+        <div><p>추천 구성 예시</p><h2>${result.profile_label} <span style="color:${accent}">${result.badge}</span></h2></div>
+        <i class="fa-solid fa-compass" style="color:${accent}"></i>
       </div>
-      <p class="portfolio-guide-intro">${config.intro}</p>
+      <p class="portfolio-guide-intro">${result.intro}</p>
       <div class="guide-allocation-bar" aria-label="자산 구성 비중">${blocks}</div>
       <ul class="guide-allocation-list">${rows}</ul>
-      <div class="portfolio-guide-note"><i class="fa-solid fa-circle-info"></i><span><b>미리 알아둘 점:</b> ${config.note}</span></div>
+      <div class="portfolio-guide-note"><i class="fa-solid fa-circle-info"></i><span><b>미리 알아둘 점:</b> ${result.note}</span></div>
+      ${renderSaveState(result)}
     </section>`;
+}
+
+// 저장 여부를 화면에 드러낸다. 저장에 실패했는데 결과만 보여주면 사용자는 이력에
+// 남았다고 믿는다. 서버가 503 을 주면 preview 로 폴백하되 그 사실을 반드시 적는다.
+function renderSaveState(result) {
+  if (result.recommendation_id) {
+    const at = new Date(result.created_at).toLocaleString('ko-KR');
+    return `<p class="portfolio-guide-saved"><i class="fa-solid fa-clock-rotate-left"></i> ${at} 이력에 저장했습니다 (번호 ${result.recommendation_id}).</p>`;
+  }
+  if (result.saveFailed) {
+    return `<p class="portfolio-guide-saved" data-state="failed"><i class="fa-solid fa-triangle-exclamation"></i> 결과는 보여드리지만 <b>이력에 저장되지 않았습니다.</b> ${result.saveFailed}</p>`;
+  }
+  return '';
 }
 
 export function portfolioGuideView(container) {
@@ -97,7 +100,7 @@ best_i = int(np.argmax(port_sharpes))</code></pre>
           <label><span>가격이 내려갈 때 내 마음은?</span><select class="param-input" id="guide-risk"><option value="low">불안해서 빠르게 줄이고 싶어요</option><option value="medium" selected>상황을 보며 유지할 수 있어요</option><option value="high">길게 보고 기다릴 수 있어요</option></select></label>
           <button class="run-btn" id="guide-run"><i class="fa-solid fa-wand-magic-sparkles"></i> 구성 예시 보기</button>
         </section>
-        <div id="guide-result">${renderProfile('balanced')}</div>
+        <div id="guide-result"><p class="portfolio-guide-loading">추천 구성을 불러오는 중입니다…</p></div>
       </div>
       <section class="portfolio-guide-check"><h2><i class="fa-solid fa-list-check"></i> 구성 전에 확인해 보세요</h2><div><p><b>생활비와 비상금</b><span>가까운 시일에 쓸 돈은 투자금과 분리했나요?</span></p><p><b>한 종목 쏠림</b><span>좋아하는 종목이나 같은 업종에 너무 많이 담기지 않았나요?</span></p><p><b>정기 점검</b><span>정한 목적과 비중이 지금도 내 상황에 맞는지 살펴보세요.</span></p></div></section>
       <p class="portfolio-guide-disclaimer">이 내용은 금융 교육을 위한 일반적인 구성 예시이며, 개인별 투자 조언이나 수익을 보장하는 추천이 아닙니다.</p>
@@ -126,11 +129,42 @@ best_i = int(np.argmax(port_sharpes))</code></pre>
     if (event.key === 'Escape') closeSharpeModal();
   });
 
-  container.querySelector('#guide-run').addEventListener('click', () => {
-    const risk = container.querySelector('#guide-risk').value;
-    const horizon = container.querySelector('#guide-horizon').value;
-    const goal = container.querySelector('#guide-goal').value;
-    const profile = goal === 'protect' ? 'stable' : goal === 'growth' && horizon === 'long' && risk !== 'low' ? 'growth' : suggestedProfile(risk, horizon);
-    result.innerHTML = renderProfile(profile);
+  const runButton = container.querySelector('#guide-run');
+
+  const answers = () => ({
+    goal: container.querySelector('#guide-goal').value,
+    horizon: container.querySelector('#guide-horizon').value,
+    risk: container.querySelector('#guide-risk').value,
+  });
+
+  const showError = (message) => {
+    result.innerHTML = `<p class="portfolio-guide-loading" data-state="failed">추천 구성을 불러오지 못했습니다. ${message}</p>`;
+  };
+
+  // 진입 시 기본 선택값으로 판정해 보여준다. 예전에는 renderProfile('balanced') 가
+  // 하드코딩돼 있었고 기본값의 판정 결과와 우연히 일치했을 뿐이다.
+  // preview 는 저장하지 않으므로 방문만으로 이력이 쌓이지 않는다.
+  api.recommendationPreview(answers())
+    .then((data) => { result.innerHTML = renderProfile(data); })
+    .catch((error) => showError(error.message));
+
+  runButton.addEventListener('click', async () => {
+    const body = answers();
+    runButton.disabled = true;
+    try {
+      // 버튼을 누른 결과는 이력에 남긴다. 저장이 실패해도 화면은 살아 있어야 하므로
+      // preview 로 폴백하되, 저장되지 않았다는 사실을 결과 안에 함께 적는다.
+      let data;
+      try {
+        data = await api.recommendationCreate({ ...body, anon_id: visitorId() });
+      } catch (saveError) {
+        data = { ...(await api.recommendationPreview(body)), saveFailed: saveError.message };
+      }
+      result.innerHTML = renderProfile(data);
+    } catch (error) {
+      showError(error.message);
+    } finally {
+      runButton.disabled = false;
+    }
   });
 }
