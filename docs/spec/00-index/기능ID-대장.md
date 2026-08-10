@@ -44,10 +44,14 @@
 
 | ID | 기능 | SPA 라우트 | 백엔드 | 등급 | 상태 |
 | --- | --- | --- | --- | --- | --- |
-| F01 | 대시보드 (홈) | `home` | `GET /api/home/market-candle`<br>`POST /api/market/snapshot` | B | 동작 |
+| F01 | 대시보드 (홈) | `home` | `GET /api/home/market-candle`<br>`POST /api/market/snapshot`<br>*(고아: `GET /api/home/kospi-candle` · `/box-range`)* | B | 동작 |
 | F02 | 서버 리소스 모니터 | `server-resources` | `GET /api/system/resources`<br>`GET /api/health`<br>`POST /api/visitors/heartbeat` | C | 동작 |
 
 > `home.js:130,204` 확인. **README 3절의 홈 화면 API 목록은 틀렸습니다** → [CN-004](변경이력.md#cn-004)
+>
+> ⚠ **홈 계열 GET 은 실제로 3개입니다.** `kospi-candle`(`main.py:2181`) ·
+> `box-range`(`main.py:2187`)가 프런트에서 호출되지 않는 고아 라우트입니다
+> → [CN-026](변경이력.md#cn-026) (세션 7에서 연결/삭제 결정).
 
 ### 1.2 포트폴리오 — 프로젝트의 심장
 
@@ -111,11 +115,19 @@
 | ID | 기능 | 진입 경로 | 백엔드 | 등급 | 상태 |
 | --- | --- | --- | --- | --- | --- |
 | F28 | 백테스트 실험실 (LEAN 워크포워드) | `pages/backtest-lab.html`<br>← `index.html:130`, `sidebar-nav.html:34` | `GET /api/backtest-lab/config`<br>`POST /api/backtest-lab/run`<br>`POST /api/backtest-lab/report` | B | 동작 |
-| F29 | 유튜브 학습 자료실 | `pages/youtube.html` | 없음 (정적 JSON) | C | **미연결** |
+| F29 | 유튜브 학습 자료실 (**10주제 · 영상 30개**) | `pages/youtube.html` | 없음 (정적 JSON 13.8 KB) | C | **미연결** |
 
 > **F28·F29 는 이번 세션에서 새로 부여한 ID 입니다.** 직전 대장은 F01~F27 까지였고,
 > F28 은 커밋 `718f161` 로 들어온 신규 기능입니다. → [CN-007](변경이력.md#cn-007)
-> **F29 는 어느 화면에서도 링크가 없습니다.** 연결하거나 지워야 합니다. → [CN-012](변경이력.md#cn-012)
+>
+> ✅ **F29 는 살리기로 결정됐습니다** (2026-08-10) → [CN-051](변경이력.md#cn-051).
+> "정적 JSON" 이라는 이전 서술은 과소평가였습니다 — **10주제 · 영상 30개 ·
+> 자체 iframe 플레이어 · `localStorage` 시청 이력**을 갖춘 334줄 모듈이고,
+> **빠진 것은 사이드바 링크 하나**입니다. CN-012 는 이것으로 해소됩니다.
+>
+> **두 기능의 상세 명세는 `20-기능명세/` 의 부록에 있습니다** —
+> F28 → [02-포트폴리오 6절](../20-기능명세/02-포트폴리오.md#6-부록--f28--백테스트-실험실-spa-밖) ·
+> F29 → [06-학습과-AI 5절](../20-기능명세/06-학습과-AI.md#5-부록--f29--유튜브-학습-자료실-spa-밖).
 
 ---
 
@@ -164,12 +176,23 @@
 > 수업 `learning/05-time-series` 의 통계적 시계열(분해·ARIMA·계절성)을
 > **F05·F28 안으로 흡수**합니다. → [CN-009](변경이력.md#cn-009)
 
-### 3.1 파일만 삭제 (라우팅되지 않음)
+### 3.1 파일만 삭제 (라우팅되지 않음) — **2026-08-10 정정**
 
-| 파일 | 사유 |
-| --- | --- |
-| `app/frontend/js/views/cloudAiResources.js` | `app.js` 의 `routes` 에 없음. 진입 불가 |
-| `app/frontend/js/views/sentiment.js` | 위와 동일 |
+| 파일 | 이전 판정 | **실측 (2026-08-10)** | 조치 |
+| --- | --- | --- | --- |
+| `app/frontend/js/views/cloudAiResources.js` | ~~삭제~~ | ❌ **12개 뷰가 import 중** | **유지** |
+| `app/frontend/js/views/sentiment.js` | 삭제 | ✅ 참조 0건 | 삭제 |
+
+```
+$ grep -rln "from './cloudAiResources.js'" app/frontend/js/views/ | wc -l
+12                                                          # 실측 2026-08-10
+```
+
+> **"라우팅되지 않는다 = 죽은 코드" 라는 추론이 절반 틀렸습니다.**
+> `cloudAiResources.js` 는 화면이 아니라 **공용 부품**입니다 —
+> `cloudResourceCard(viewName)` 이 각 모듈을 AWS·Azure·GCP 관리형 AI 서비스로
+> 구현하면 어떤 리소스를 쓰는지 설명하는 카드를 만듭니다. 라우트가 없는 것이 당연합니다.
+> X01~X05 폐기 후에도 **9개 뷰가 남아 계속 씁니다.** → [CN-050](변경이력.md#cn-050)
 
 ---
 
