@@ -1,0 +1,290 @@
+{
+ "_설명": [
+  "F28 리팩터 **전** 의 /run 출력이다. 3계층 분리가 값을 바꾸지 않았음을 대조하는 기준선.",
+  "뜬 시점: 2026-08-11 · 커밋 34aec37 의 routers/backtest_lab.py:_run_pipeline",
+  "시세는 verify_backtest_api.py 의 fake_rows 합성 일봉이다 — 난수를 쓰지 않아 매 실행 같다.",
+  "rows 와 simple_backtest.curve 는 길이와 SHA-256 만 남겼다. 원문을 다 담으면 93KB 인데",
+  "그 둘이 87KB 를 차지하고, 대조 목적에는 '바뀌었는가' 만 있으면 충분하다.",
+  "sha256 은 sort_keys=True · separators=(',',':') 로 직렬화한 값이다 (키 순서 무관 · CN-098)."
+ ],
+ "cases": {
+  "alt": {
+   "expected": {
+    "feature_importance": {
+     "hl_range": 0.00035287234143579484,
+     "range_position": 0.010907795941012433,
+     "ret_1": 2.153379679245424,
+     "ret_10": 0.0025368743281632077,
+     "ret_2": 2.7417172328525475e-05,
+     "ret_3": -0.00014989884385456785,
+     "ret_5": 3.305491274261385e-05,
+     "rsi14": 0.0007959424003826321,
+     "sma20_gap": 0.0002856965681564905,
+     "sma5_gap": 3.3514610644935773e-06,
+     "vol20": 0.0006170166088300455,
+     "volume_ratio": -2.8780557931917804e-05
+    },
+    "meta": {
+     "engine": "간이(벡터화) 계산 — 정본은 LEAN 엔진 실행 결과입니다.",
+     "features": [
+      "ret_1",
+      "ret_2",
+      "ret_3",
+      "ret_5",
+      "ret_10",
+      "sma5_gap",
+      "sma20_gap",
+      "rsi14",
+      "vol20",
+      "volume_ratio",
+      "hl_range",
+      "range_position"
+     ],
+     "model": "sklearn HistGradientBoostingRegressor",
+     "name": "삼성전자",
+     "price_first": "2024-10-03",
+     "price_last": "2026-05-29",
+     "price_rows": 432,
+     "test_end": "2026-05-31",
+     "test_samples": 106,
+     "test_start": "2026-01-01",
+     "ticker": "005930.KS",
+     "train_end": "2025-12-31",
+     "train_samples": 260,
+     "train_start": "2025-01-01"
+    },
+    "prediction_metrics": {
+     "beats_naive_direction": true,
+     "beats_naive_mae": true,
+     "direction_accuracy": 100.0,
+     "mae_price": 11.287045196061987,
+     "mae_return": 0.00013261325582196324,
+     "mape_price": 0.013247516951917426,
+     "n_samples": 106,
+     "naive_direction_accuracy": 51.886792452830186,
+     "naive_mae_price": 217.77264150943418,
+     "naive_mae_return": 0.0025572021839144607,
+     "naive_rmse_return": 0.002909469495547957,
+     "r2_vs_naive": 0.9967676669434673,
+     "rmse_price": 14.092798853776946,
+     "rmse_return": 0.00016541384622010264,
+     "up_ratio_actual": 51.886792452830186,
+     "up_ratio_predicted": 51.886792452830186
+    },
+    "regime": {
+     "test": {
+      "annual_volatility_pct": 4.525259807988535,
+      "days": 107,
+      "end": "2026-05-29",
+      "first_close": 80291.1,
+      "last_close": 85364.4,
+      "mean_abs_move_pct": 0.25400474569689235,
+      "period_return_pct": 6.318633073902324,
+      "start": "2026-01-01"
+     },
+     "train": {
+      "annual_volatility_pct": 4.953167001900314,
+      "days": 261,
+      "end": "2025-12-31",
+      "first_close": 74483.2,
+      "last_close": 80233.2,
+      "mean_abs_move_pct": 0.27575027127443635,
+      "period_return_pct": 7.719861660079053,
+      "start": "2025-01-01"
+     },
+     "volatility_ratio": 0.9211405106619022
+    },
+    "simple_backtest": {
+     "benchmark": {
+      "cagr_pct": 14.912298468622232,
+      "days_in_market_pct": 100.0,
+      "end_equity": 53010544.74079254,
+      "label": "매수·보유",
+      "max_drawdown_pct": -5.80901001443046,
+      "sharpe": 3.0446272255224174,
+      "start_equity": 50000000.0,
+      "total_cost": 148771.79615859687,
+      "total_return_pct": 6.021089481585085,
+      "trades": 1,
+      "volatility_pct": 4.6010540110432405,
+      "win_rate_pct": 100.0
+     },
+     "cost_assumptions": {
+      "commission_rate": 0.00015,
+      "initial_cash": 50000000.0,
+      "sell_tax_rate": 0.0015,
+      "slippage_rate": 0.0005
+     },
+     "excess_return_pct": 11.384663589234288,
+     "strategy": {
+      "cagr_pct": 46.44570389708396,
+      "days_in_market_pct": 51.886792452830186,
+      "end_equity": 58702876.53540969,
+      "label": "예측 신호 전략",
+      "max_drawdown_pct": -0.2508062405357947,
+      "sharpe": 12.236803639062721,
+      "start_equity": 50000000.0,
+      "total_cost": 329956.5127659887,
+      "total_return_pct": 17.405753070819372,
+      "trades": 2,
+      "volatility_pct": 3.1238193454225316,
+      "win_rate_pct": 100.0
+     }
+    }
+   },
+   "long_arrays": {
+    "rows": {
+     "length": 106,
+     "sha256": "6916bce4fa49e121e22ef66ed7a215ea08abb2169a55ba8cec9b8051b3f84595"
+    },
+    "simple_backtest.curve": {
+     "length": 106,
+     "sha256": "98d789aee792cd82ba16a88b88703e1d557f2cb51a0793a2fa24d314c65a02e3"
+    }
+   },
+   "request": {
+    "initial_cash": 50000000,
+    "name": "삼성전자",
+    "test_end": "2026-05-31",
+    "ticker": "005930.KS",
+    "warmup_days": 90
+   }
+  },
+  "default": {
+   "expected": {
+    "feature_importance": {
+     "hl_range": 0.0005288049057027289,
+     "range_position": 0.013288134248553685,
+     "ret_1": 2.2068442808238102,
+     "ret_10": 0.0020102404446564527,
+     "ret_2": 6.901984207010602e-05,
+     "ret_3": -0.00014725052201336464,
+     "ret_5": 9.712692556409496e-05,
+     "rsi14": 0.0006401028519405604,
+     "sma20_gap": 0.0016515413756557963,
+     "sma5_gap": 0.0,
+     "vol20": 0.0004337422515254596,
+     "volume_ratio": 0.00027193230553050894
+    },
+    "meta": {
+     "engine": "간이(벡터화) 계산 — 정본은 LEAN 엔진 실행 결과입니다.",
+     "features": [
+      "ret_1",
+      "ret_2",
+      "ret_3",
+      "ret_5",
+      "ret_10",
+      "sma5_gap",
+      "sma20_gap",
+      "rsi14",
+      "vol20",
+      "volume_ratio",
+      "hl_range",
+      "range_position"
+     ],
+     "model": "sklearn HistGradientBoostingRegressor",
+     "name": "현대차",
+     "price_first": "2024-09-03",
+     "price_last": "2026-06-30",
+     "price_rows": 476,
+     "test_end": "2026-06-30",
+     "test_samples": 128,
+     "test_start": "2026-01-01",
+     "ticker": "005380.KS",
+     "train_end": "2025-12-31",
+     "train_samples": 260,
+     "train_start": "2025-01-01"
+    },
+    "prediction_metrics": {
+     "beats_naive_direction": true,
+     "beats_naive_mae": true,
+     "direction_accuracy": 99.21875,
+     "mae_price": 10.670262920824825,
+     "mae_return": 0.00012323570242354887,
+     "mape_price": 0.01231332739787431,
+     "n_samples": 128,
+     "naive_direction_accuracy": 50.78125,
+     "naive_mae_price": 202.45234374999973,
+     "naive_mae_return": 0.0023425914648208977,
+     "naive_rmse_return": 0.0027206140632740307,
+     "r2_vs_naive": 0.9966921587460056,
+     "rmse_price": 13.563362621273788,
+     "rmse_return": 0.00015647294922282833,
+     "up_ratio_actual": 50.78125,
+     "up_ratio_predicted": 51.5625
+    },
+    "regime": {
+     "test": {
+      "annual_volatility_pct": 4.297004079470286,
+      "days": 129,
+      "end": "2026-06-30",
+      "first_close": 86266.7,
+      "last_close": 91059.0,
+      "mean_abs_move_pct": 0.23565183717587077,
+      "period_return_pct": 5.555214236779671,
+      "start": "2026-01-01"
+     },
+     "train": {
+      "annual_volatility_pct": 4.9017406624368505,
+      "days": 261,
+      "end": "2025-12-31",
+      "first_close": 72791.1,
+      "last_close": 85911.1,
+      "mean_abs_move_pct": 0.27729349223252525,
+      "period_return_pct": 18.024181527686768,
+      "start": "2025-01-01"
+     },
+     "volatility_ratio": 0.8498282281297256
+    },
+    "simple_backtest": {
+     "benchmark": {
+      "cagr_pct": 10.618925260910306,
+      "days_in_market_pct": 100.0,
+      "end_equity": 105259807.15032847,
+      "label": "매수·보유",
+      "max_drawdown_pct": -5.809010014430472,
+      "sharpe": 2.3660176873139465,
+      "start_equity": 100000000.0,
+      "total_cost": 295407.08645120263,
+      "total_return_pct": 5.259807150328477,
+      "trades": 1,
+      "volatility_pct": 4.305116930863409,
+      "win_rate_pct": 100.0
+     },
+     "cost_assumptions": {
+      "commission_rate": 0.00015,
+      "initial_cash": 100000000,
+      "sell_tax_rate": 0.0015,
+      "slippage_rate": 0.0005
+     },
+     "excess_return_pct": 13.072013833027007,
+     "strategy": {
+      "cagr_pct": 39.289593931407055,
+      "days_in_market_pct": 51.5625,
+      "end_equity": 118331820.98335548,
+      "label": "예측 신호 전략",
+      "max_drawdown_pct": -0.2542841825437958,
+      "sharpe": 11.209428148997475,
+      "start_equity": 100000000.0,
+      "total_cost": 999078.0105938911,
+      "total_return_pct": 18.331820983355485,
+      "trades": 3,
+      "volatility_pct": 2.9621250167836157,
+      "win_rate_pct": 100.0
+     }
+    }
+   },
+   "long_arrays": {
+    "rows": {
+     "length": 128,
+     "sha256": "cf5a4b67adf9cc585dac113ff2b8f08cddfe8eb0ef3540076ffa4f9d0443725d"
+    },
+    "simple_backtest.curve": {
+     "length": 128,
+     "sha256": "3f01488e2bd3db20ec78f117a8f5c6706339c9ac1c678b557654a3d7b568b418"
+    }
+   },
+   "request": {}
+  }
+ }
+}
