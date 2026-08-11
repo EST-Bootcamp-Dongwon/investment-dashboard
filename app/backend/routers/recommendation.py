@@ -19,19 +19,18 @@ from pydantic import BaseModel, Field
 try:
     from ..clients import recommendation_repo, supabase_client
     from ..services import recommendation as service
+    from . import owner
 except ImportError:  # `uvicorn main:app` 를 app/backend 에서 실행하는 경우
     from clients import recommendation_repo, supabase_client  # type: ignore
+    from routers import owner  # type: ignore
     from services import recommendation as service  # type: ignore
 
 router = APIRouter(prefix="/api/recommendation", tags=["추천"])
 
-# anon_id 검증 상한이 /api/visitors/heartbeat(main.py:228, 16~80)와 다르다.
-# recommendation.anon_id 는 DB 에서 64자 상한이라(테이블-정의서 4.2절), 80 으로
-# 맞추면 pydantic 을 통과한 값이 DB 에서 터져 500 이 된다. 좁은 쪽에 맞춘다.
-_ANON_ID = {"min_length": 16, "max_length": 64, "pattern": r"^[A-Za-z0-9_-]+$"}
+# 소유자 판별과 anon_id 제약은 `routers/owner.py` 로 옮겼다. F05 가 같은 것을 쓰게 되어
+# 사본이 둘이 되는 시점에 뽑은 것이고, 이 파일의 동작은 달라지지 않았다.
+_ANON_ID = owner.ANON_ID
 
-_OWNER_REQUIRED = "로그인하거나 브라우저 식별자를 함께 보내 주세요."
-_TOKEN_INVALID = "로그인 정보가 유효하지 않습니다. 다시 로그인해 주세요."
 _SAVE_FAILED = "추천 결과를 저장할 수 없습니다. 잠시 후 다시 시도해 주세요."
 _READ_FAILED = "추천 이력을 불러올 수 없습니다. 잠시 후 다시 시도해 주세요."
 _CONSTANT_BROKEN = "자산 배분 구성이 올바르지 않습니다."
@@ -55,30 +54,8 @@ class CreateRequest(PreviewRequest):
 
 
 def _resolve_owner(authorization: str | None, anon_id: str | None) -> tuple[str | None, str | None]:
-    """토큰이 있으면 `user_id` 기준, 없으면 `anon_id` 기준으로 소유자를 정한다.
-
-    둘을 OR 로 합치지 않는다 — 비로그인 이력이 로그인 계정에 자동 병합되면 소유
-    관계가 흐려진다. 병합이 필요하면 별도 기능으로 다룬다.
-
-    `ck_recommendation_owner` 가 둘 중 하나는 NOT NULL 이길 요구하므로, 둘 다 없으면
-    여기서 400 으로 막는다. DB 제약 위반을 500 으로 흘리지 않는다.
-    """
-    token = ""
-    if authorization and authorization.lower().startswith("bearer "):
-        token = authorization[7:].strip()
-
-    if token:
-        try:
-            return supabase_client.auth_user_id(token), None
-        except supabase_client.SupabaseAuthError as exc:
-            raise HTTPException(status_code=401, detail=_TOKEN_INVALID) from exc
-        except supabase_client.SupabaseError as exc:
-            raise HTTPException(status_code=503, detail=_READ_FAILED) from exc
-
-    if anon_id:
-        return None, anon_id
-
-    raise HTTPException(status_code=400, detail=_OWNER_REQUIRED)
+    """`owner.resolve_owner` 에 이 기능의 503 문구만 얹는다."""
+    return owner.resolve_owner(authorization, anon_id, unavailable_detail=_READ_FAILED)
 
 
 def _build(goal: str, horizon: str, risk: str) -> dict:
