@@ -62,7 +62,7 @@ def _request(
     url: str,
     *,
     headers: dict[str, str],
-    body: dict[str, Any] | None = None,
+    body: Any = None,
 ) -> Any:
     payload = json.dumps(body).encode("utf-8") if body is not None else None
     req = urllib.request.Request(url, data=payload, headers=headers, method=method)
@@ -108,6 +108,35 @@ def rpc(function_name: str, params: dict[str, Any]) -> Any:
     """
     url = f"{_base_url()}/rest/v1/rpc/{urllib.parse.quote(function_name)}"
     return _request("POST", url, headers=_rest_headers(), body=params)
+
+
+def insert(
+    table: str,
+    row: dict[str, Any],
+    *,
+    returning: bool = False,
+    ignore_duplicates: bool = False,
+) -> list[dict[str, Any]]:
+    """테이블에 한 행을 넣는다. `returning=True` 면 넣은 행을 돌려받는다.
+
+    **`rpc()` 와 나란히 두는 이유**는 둘 중 어느 것을 쓸지가 설계 판단이기 때문이다.
+    F03·F05 는 부모와 자식을 한 트랜잭션으로 넣어야 해서 `rpc()` 말고는 방법이
+    없었다. F04 의 `combination_query` 는 **단일 테이블**이라 요청 하나가 곧
+    트랜잭션 하나이고, 함수를 만들면 마이그레이션과 유지 대상만 늘어난다.
+
+    `ignore_duplicates=True` 는 PostgREST 의 upsert 로, 기본키가 겹치면 아무것도
+    하지 않는다(`ON CONFLICT DO NOTHING`). `app_user` 를 미리 만들 때 쓴다.
+    출처: https://postgrest.org/en/v12/references/api/tables_views.html#upsert
+    (2026-08-11 확인)
+    """
+    prefer = ["return=representation" if returning else "return=minimal"]
+    if ignore_duplicates:
+        prefer.append("resolution=ignore-duplicates")
+
+    url = f"{_base_url()}/rest/v1/{urllib.parse.quote(table)}"
+    headers = {**_rest_headers(), "Prefer": ",".join(prefer)}
+    rows = _request("POST", url, headers=headers, body=row)
+    return rows if isinstance(rows, list) else []
 
 
 def select(table: str, params: dict[str, str]) -> list[dict[str, Any]]:
