@@ -1,3 +1,5 @@
+import { disclaimer } from '../components/disclaimer.js';
+
 // ── 공통 유틸 ────────────────────────────────────────────────────────────────
 function fmt(n, digits = 0) {
   if (n === null || n === undefined || isNaN(n)) return '-';
@@ -634,8 +636,15 @@ function renderReport(content) {
           </div>`).join('')}
       </div>
       <div style="margin-top:12px;">
-        <label style="font-size:0.78rem;color:#64748b;display:block;margin-bottom:3px;">투자 의견 요약 (한 줄)</label>
-        <input type="text" id="rpt-opinion" value="안정적 FCF 창출과 기술 해자를 바탕으로 현재 주가 대비 약 18% 저평가로 판단"
+        <!-- 화면-상세.md 6.1절. 이 칸에는 특정 종목이 저평가라는 결론이 기본값으로
+             박혀 있었다 — 사용자가 아무것도 하지 않아도 남의 결론이 화면에 떠 있었고,
+             그 수치의 근거는 코드에 없었다. 입력란은 남긴다(CN-047: 자기 결론을 적는
+             칸은 학습에 필요하다). 기본값을 비우고 placeholder 는 형식 안내만 한다.
+             (옛 문자열을 여기 옮겨 적지 않는다. 주석도 화면에 실려 나가고,
+              scripts/verify_r07_expressions.py 가 파일 전체에서 그 문구를 찾는다.) -->
+        <label style="font-size:0.78rem;color:#64748b;display:block;margin-bottom:3px;">내가 정리한 관찰</label>
+        <input type="text" id="rpt-opinion" value=""
+          placeholder="예: 성장 가정과 할인율을 바꿔가며 확인한 범위를 적어 보세요"
           style="width:100%;background:#f8fafc;border:1px solid #d9e1ec;border-radius:6px;padding:7px 10px;color:#0f172a;font-size:0.85rem;">
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:12px;">
@@ -718,8 +727,10 @@ function renderReport(content) {
         </div>
 
         <div style="padding:14px;background:#f1f5f9;border-radius:8px;margin-bottom:16px;border-left:3px solid ${ratingColor};">
-          <div style="font-size:0.75rem;color:#475569;margin-bottom:4px;">투자 의견</div>
-          <div style="font-size:0.88rem;color:#0f172a;line-height:1.6;">${g('rpt-opinion')}</div>
+          <div style="font-size:0.75rem;color:#475569;margin-bottom:4px;">내가 정리한 관찰</div>
+          <div style="font-size:0.88rem;color:#0f172a;line-height:1.6;">${
+            g('rpt-opinion') || '<span style="color:#94a3b8;">아직 적지 않았습니다.</span>'
+          }</div>
         </div>
 
         <div>
@@ -731,9 +742,9 @@ function renderReport(content) {
           </div>
         </div>
 
-        <div style="margin-top:16px;padding-top:14px;border-top:1px solid #e2e8f0;font-size:0.72rem;color:#475569;line-height:1.6;">
-          본 리포트는 교육 목적의 실습 결과물이며 실제 투자 권유가 아닙니다. 모든 가정과 수치는 학습용으로 임의 설정된 것입니다.
-        </div>
+        <!-- 화면-상세.md 3.3절이 F19 를 strong 으로 지정했다. 여기 있던 약한 주의
+             한 줄(0.72rem 회색)을 공통 컴포넌트로 교체한다. -->
+        ${disclaimer('strong')}
       </div>`;
   });
 }

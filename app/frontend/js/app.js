@@ -39,6 +39,7 @@ import { adminRagIndexView } from './views/adminRagIndex.js';
 import { companyFinancialView } from './views/companyFinancial.js';
 import { taxAccountingView }         from './views/taxAccounting.js';
 import { dartFinancialAnalysisView } from './views/dartFinancialAnalysis.js';
+import { disclaimer, DISCLAIMER_CONTEXT } from './components/disclaimer.js';
 import { api }                 from './api.js';
 import { restoreFormState, saveFormState, visitorId } from './utils/localState.js';
 
@@ -195,6 +196,53 @@ const PRACTICE_GUIDES = {
   },
 };
 
+// ── 면책 전개 (R-07 · CN-060) ───────────────────────────────────────────────
+//
+// `50-UI/화면-상세.md` 3.3절이 화면별 강도를 정해 뒀다. 그 표의 `default` 행을
+// 여기 옮긴다.
+//
+// **화면 파일마다 붙이지 않고 라우터에서 한 번에 붙이는 이유**는 셋이다.
+//
+//   1. `default` 대상이 열일곱 화면이고, 각 뷰의 템플릿 끝을 찾아 손대면
+//      열일곱 번 깨질 기회가 생긴다. 여기는 한 곳이다.
+//   2. 화면이 새로 생기면 이 표에 한 줄 더하는 것으로 끝난다. 뷰 파일을 고쳐야
+//      한다는 것을 기억할 필요가 없다.
+//   3. **무엇이 빠졌는지 셀 수 있다** — 표가 코드 안에 있으므로
+//      `scripts/verify_r07_expressions.py` 가 명세서 3.3절과 대조한다.
+//
+// `strong` 은 여기 없다. 강한 면책은 결과 바로 옆에 붙어야 의미가 있어서 화면이
+// 직접 `disclaimer('strong')` 을 부른다 (F03·F04·F05·F19·F23·F24·F25·F27).
+// F12 도 여기 없다 — 이미 자체 강한 면책을 들고 있다(technicalChart.js).
+// F02(서버 리소스)는 투자 정보가 아니라 **제외**다. 3.3절이 그렇게 적었다.
+const DISCLAIMER_DEFAULT_VIEWS = [
+  'home',                                                   // F01
+  'portfolio', 'risk', 'backtest', 'pipeline',              // F06 · F07 · F08 · F09
+  'volume-cloud', 'world-markets',                          // F10 · F11
+  'macro-realtime', 'macro-simulation', 'kospi-excluded',   // F13 · F14 · F15
+  'industry-analysis', 'company-financial',                 // F16 · F17
+  'financial-statement',                                    // F18
+  'dart-company-search', 'dart-region-search',              // F20 · F21
+  'group-network',                                          // F22
+  'tax-accounting',                                         // F26
+];
+
+// 화면별 한 문장. 3.2절 표에 확정된 것만 둔다. F07·F08·F09 는 한 행을 공유한다.
+const DISCLAIMER_VIEW_CONTEXT = {
+  'risk': DISCLAIMER_CONTEXT.F07,
+  'backtest': DISCLAIMER_CONTEXT.F07,
+  'pipeline': DISCLAIMER_CONTEXT.F07,
+};
+
+function addDisclaimer(view) {
+  if (!DISCLAIMER_DEFAULT_VIEWS.includes(view)) return;
+  // 뷰가 스스로 붙였으면 두 번 붙이지 않는다. 라우터가 뒤에 도므로 여기서 걸러진다.
+  if (app.querySelector('.disclaimer')) return;
+  app.insertAdjacentHTML(
+    'beforeend',
+    disclaimer('default', { context: DISCLAIMER_VIEW_CONTEXT[view] || '' }),
+  );
+}
+
 function addPracticeGuide(view) {
   const guide = PRACTICE_GUIDES[view];
   if (!guide || app.querySelector('.practice-guide')) return;
@@ -251,6 +299,8 @@ function navigate(view) {
   // 렌더링 직후 실행해 각 뷰의 기본값 대신 마지막 입력값을 복원한다.
   requestAnimationFrame(() => restoreFormState(view, app));
   addPracticeGuide(view);
+  // 면책은 화면 맨 끝에 붙으므로 practice-guide(맨 앞) 다음에 불러도 순서가 엉키지 않는다.
+  addDisclaimer(view);
 
   if (window.innerWidth <= MOBILE_BREAKPOINT && typeof closeSidebar === 'function') closeSidebar();
 }

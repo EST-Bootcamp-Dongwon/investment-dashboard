@@ -1,3 +1,5 @@
+import { disclaimer } from '../components/disclaimer.js';
+
 const BASE_MONEY = 1000000;
 const MIN_MONEY = 100000;
 // 학습용 시뮬레이션에서 과도한 음수 시나리오를 제한하기 위한 연간 최소 성장 배수(-30%).
@@ -130,6 +132,9 @@ export function financialKnowledgeView(container) {
         ※ 기존 "산업 경쟁력 분석 → 섹터 주가 비교" 화면에서는 다중 ETF(섹터) 수익률·변동성 비교가 가능합니다.
       </p>
     </section>
+    <!-- 화면-상세.md 3.3절이 F24 를 strong 으로 지정했다. 이 화면은 면책이 한 줄도
+         없었는데, 금액을 넣으면 미래 금액이 나오는 화면이라 없으면 안 된다. -->
+    ${disclaimer('strong')}
   `;
 
   const render = () => {

@@ -1,3 +1,20 @@
+/**
+ * F25 투자 성향 분석 — CN-048 적용본.
+ *
+ * 이 화면은 2026-08-10 까지 `products` 배열 6개로 **판매 중인 실명 금융상품**을
+ * 지목했다 (`KB국민은행 정기예금` · `KODEX 200` · `TIGER 미국S&P500` …).
+ * 강사님 요구 R-07 이 "개인별 투자 조언이 아님을 유지" 를 요구하는데, 실명 상품
+ * 지목은 CN-048 의 표현대로 **"하지 말아야 할 말"** 이다 — F03 이 자산군만 제시하는
+ * 것과 갈라지는 지점이다.
+ *
+ * 그래서 `assetClasses` 로 이름을 바꾸고 값을 **자산군·상품 유형**으로 교체했다.
+ * 사양은 docs/spec/20-기능명세/06-학습과-AI.md 2.3절 · 화면-상세.md 3.4절.
+ *
+ * **순서가 사양에 못박혀 있다** — 화면-상세.md 3.4절: "문구를 붙인다고 상품 추천이
+ * 교육이 되지 않습니다." 그래서 자산군 교체가 1, 면책이 2 다. 이 파일은 둘 다 한다.
+ */
+import { disclaimer } from '../components/disclaimer.js';
+
 // Virtual canvas coordinate space
 const VW = 900, VH = 490;
 
@@ -54,11 +71,15 @@ const STRATEGIES = {
       { label: '주식ETF', pct: 10, color: '#f59e0b' },
       { label: '현금', pct: 5,  color: '#94a3b8' },
     ],
-    expected: '연 2~3%', risk: '낮음 <i class="fa-solid fa-circle" style="color:#22c55e;"></i>',
+    expected: '예금 금리 수준', risk: '낮음 <i class="fa-solid fa-circle" style="color:#22c55e;"></i>',
     horizon: '단기 (1년 미만)',
-    products: ['KB국민은행 정기예금', 'KODEX 단기채권PLUS', '예금보험 적금'],
+    assetClasses: ['예금·CMA', '단기채권 ETF', '적금'],
     tags: ['원금보호', '저위험', '예금·채권 중심'],
-    tip: '<i class="fa-solid fa-lightbulb"></i> 예금자보호법으로 1인당 5,000만원까지 보호됩니다.',
+    // 원문은 "예금자보호법으로 1인당 5,000만원까지 보호됩니다" 였다. 한도는 제도 개정으로
+    // 바뀌는 값이라 화면에 숫자를 박아 두면 틀린 채로 남는다. 확인일을 병기하라는 것이
+    // 06-학습과-AI.md 2.4절 3번인데, **지금 한도가 얼마인지를 이 저장소가 확인할 수단이
+    // 없다.** 그래서 숫자를 빼고 확인처를 가리킨다 — 틀린 숫자보다 낫다.
+    tip: '<i class="fa-solid fa-lightbulb"></i> 예금자보호 한도는 제도 개정으로 바뀔 수 있습니다. 가입 전 예금보험공사 공고에서 현재 한도를 확인하세요.',
   },
   short_term: {
     emoji: '<i class="fa-solid fa-bolt"></i>', name: '단기수익형',
@@ -69,9 +90,9 @@ const STRATEGIES = {
       { label: '원자재ETF', pct: 15, color: '#8b5cf6' },
       { label: '현금', pct: 10, color: '#94a3b8' },
     ],
-    expected: '연 4~6%', risk: '중하 <i class="fa-solid fa-circle" style="color:#eab308;"></i>',
+    expected: '예금 금리 초과 목표', risk: '중하 <i class="fa-solid fa-circle" style="color:#eab308;"></i>',
     horizon: '단기 (1년 미만)',
-    products: ['KODEX 200', 'TIGER 국채3년', 'KODEX 골드선물(H)'],
+    assetClasses: ['국내 대표지수 ETF', '단기 국채 ETF', '금 ETF (환헤지형)'],
     tags: ['단기수익', '혼합형', '변동 감수'],
     tip: '<i class="fa-solid fa-lightbulb"></i> 단기 매매는 거래세·수수료가 수익을 줄일 수 있습니다. 비용 확인 필수!',
   },
@@ -84,9 +105,9 @@ const STRATEGIES = {
       { label: '원자재', pct: 10, color: '#f59e0b' },
       { label: '현금', pct: 10, color: '#94a3b8' },
     ],
-    expected: '연 4~6%', risk: '중간 <i class="fa-solid fa-circle" style="color:#eab308;"></i>',
+    expected: '물가 상승률 초과 목표', risk: '중간 <i class="fa-solid fa-circle" style="color:#eab308;"></i>',
     horizon: '중기 (1~5년)',
-    products: ['TIGER 미국S&P500', 'KODEX 국고채10년', 'KODEX 골드선물(H)'],
+    assetClasses: ['미국 대표지수 ETF', '장기 국채 ETF', '금 ETF (환헤지형)'],
     tags: ['균형분산', '중기', '정기 리밸런싱'],
     tip: '<i class="fa-solid fa-lightbulb"></i> 6개월마다 비중을 원래대로 되돌리는 "리밸런싱"이 핵심입니다.',
   },
@@ -99,9 +120,9 @@ const STRATEGIES = {
       { label: '원자재ETF', pct: 10, color: '#8b5cf6' },
       { label: '현금', pct: 5,  color: '#94a3b8' },
     ],
-    expected: '연 6~9%', risk: '중상 <i class="fa-solid fa-circle" style="color:#f97316;"></i>',
+    expected: '시장 평균 수준 목표', risk: '중상 <i class="fa-solid fa-circle" style="color:#f97316;"></i>',
     horizon: '중기 (1~5년)',
-    products: ['TIGER 미국S&P500', 'KODEX 나스닥100', 'TIGER 국채3년'],
+    assetClasses: ['미국 대표지수 ETF', '미국 기술주지수 ETF', '단기 국채 ETF'],
     tags: ['성장추구', '주식중심', '변동 감수'],
     tip: '<i class="fa-solid fa-lightbulb"></i> 하락장에서 추가 매수(물타기)보다 정해진 비중을 유지하는 게 더 안전합니다.',
   },
@@ -113,9 +134,9 @@ const STRATEGIES = {
       { label: '채권ETF', pct: 20, color: '#3b82f6' },
       { label: '현금', pct: 10, color: '#94a3b8' },
     ],
-    expected: '연 7~10%', risk: '중상 <i class="fa-solid fa-circle" style="color:#f97316;"></i>',
+    expected: '시장 평균 추종', risk: '중상 <i class="fa-solid fa-circle" style="color:#f97316;"></i>',
     horizon: '장기 (5년 이상)',
-    products: ['TIGER 미국S&P500', 'KODEX 미국나스닥100', 'ACE 미국채10년'],
+    assetClasses: ['미국 대표지수 ETF', '미국 기술주지수 ETF', '미국 장기국채 ETF'],
     tags: ['인덱스투자', '장기복리', '패시브'],
     tip: '<i class="fa-solid fa-lightbulb"></i> 매달 일정액을 자동 매수(적립식)하면 평균 단가를 낮출 수 있습니다.',
   },
@@ -128,9 +149,9 @@ const STRATEGIES = {
       { label: '채권ETF', pct: 15, color: '#3b82f6' },
       { label: '현금', pct: 5,  color: '#94a3b8' },
     ],
-    expected: '연 8~12%', risk: '높음 <i class="fa-solid fa-circle" style="color:#ef4444;"></i>',
+    expected: '시장 평균 초과 목표', risk: '높음 <i class="fa-solid fa-circle" style="color:#ef4444;"></i>',
     horizon: '장기 (5년 이상)',
-    products: ['TIGER 글로벌AI&로보틱스', 'KODEX 반도체', 'TIGER 인도니프티50'],
+    assetClasses: ['글로벌 테마 ETF', '국내 섹터 ETF (반도체)', '신흥국 대표지수 ETF'],
     tags: ['알파추구', '섹터·테마', '적극운용'],
     tip: '<i class="fa-solid fa-lightbulb"></i> 과도한 집중투자는 포트폴리오 전체를 위험에 빠뜨릴 수 있습니다. 분산은 필수입니다.',
   },
@@ -374,15 +395,15 @@ function renderResult(resultEl, stratId) {
         <div>
           <div style="font-size:0.72rem;font-weight:760;color:#6b7280;letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px;">전략 요약</div>
           <div style="display:grid;grid-template-columns:auto 1fr;gap:6px 12px;font-size:0.84rem;align-items:start;">
-            <span style="color:#6b7280;">기대 수익</span><span style="font-weight:700;color:#131722;">${s.expected}</span>
+            <span style="color:#6b7280;">수익 목표 성격</span><span style="font-weight:700;color:#131722;">${s.expected}</span>
             <span style="color:#6b7280;">위험 수준</span><span style="font-weight:700;">${s.risk}</span>
             <span style="color:#6b7280;">투자 기간</span><span style="font-weight:700;color:#131722;">${s.horizon}</span>
           </div>
 
           <div style="margin-top:16px;">
-            <div style="font-size:0.72rem;font-weight:760;color:#6b7280;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;">추천 상품 예시</div>
+            <div style="font-size:0.72rem;font-weight:760;color:#6b7280;letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px;">담게 되는 자산군</div>
             <ul style="margin:0;padding:0 0 0 16px;font-size:0.82rem;color:#374151;line-height:1.8;">
-              ${s.products.map(p => `<li>${p}</li>`).join('')}
+              ${s.assetClasses.map(a => `<li>${a}</li>`).join('')}
             </ul>
           </div>
 
@@ -396,9 +417,10 @@ function renderResult(resultEl, stratId) {
         ${s.tip}
       </div>
 
-      <p style="font-size:0.75rem;color:#9ca3af;margin:14px 0 0;line-height:1.5;">
-        <i class="fa-solid fa-triangle-exclamation"></i> 이 결과는 학습 목적의 참고용이며 실제 투자 권유가 아닙니다. 투자 전 전문가와 상담하세요.
-      </p>
+      <!-- 화면-상세.md 3.3절이 F25 를 strong 으로 지정했다(2순위). 여기 있던 약한 주의
+           한 줄(회색 0.75rem)을 공통 컴포넌트로 교체한다. context 는 넘기지 않는다 —
+           3.2절 표에 F25 용 한 문장이 아직 없고, 문구를 새로 짓지 않기로 했다. -->
+      ${disclaimer('strong')}
     </div>`;
 
   resultEl.style.display = 'block';

@@ -111,6 +111,8 @@ try:
     from .routers.rag import router as rag_router
     from .routers.admin import router as admin_router
     from .routers.backtest_lab import router as backtest_lab_router
+    # F23 재무 상태 표기 (CN-046). 판정만 꺼내 둔 순수 모듈이다.
+    from .services import dart_outlook
 except ImportError:  # Allows `uvicorn main:app` from app/backend.
     from routers.ml import router as ml_router  # type: ignore
     from routers.quant import router as quant_router  # type: ignore
@@ -121,6 +123,7 @@ except ImportError:  # Allows `uvicorn main:app` from app/backend.
     from routers.rag import router as rag_router  # type: ignore
     from routers.admin import router as admin_router  # type: ignore
     from routers.backtest_lab import router as backtest_lab_router  # type: ignore
+    from services import dart_outlook  # type: ignore
 app.include_router(ml_router)
 app.include_router(quant_router)
 app.include_router(backtest_lab_router)
@@ -2424,7 +2427,7 @@ def _score_financial_health(ratios: dict) -> tuple[float, dict]:
 
 def _generate_dart_analysis(
     company: dict, market: str, ratios: dict,
-    score: float, grade: str, bsns_year: str,
+    score: float, grade: str, bsns_year: str, breakdown: dict,
 ) -> dict:
     """Generate rule-based AI financial analysis narrative."""
     corp_name = company.get("corp_name", "동 기업")
@@ -2549,42 +2552,28 @@ def _generate_dart_analysis(
                 "단기 차입 의존도를 낮추는 전략이 필요합니다."
             )
 
-    # Outlook
-    if score >= 75:
-        outlook       = "매수(Buy)"
-        outlook_eng   = "BUY"
-        outlook_color = "green"
-        outlook_reason = (
-            f"재무 건전성 종합점수 {score:.0f}점(등급: {grade}) — "
-            "견실한 재무구조·수익성을 바탕으로 중장기 투자 매력이 높습니다."
-        )
-    elif score >= 55:
-        outlook       = "중립(Hold)"
-        outlook_eng   = "HOLD"
-        outlook_color = "yellow"
-        outlook_reason = (
-            f"재무 건전성 종합점수 {score:.0f}점(등급: {grade}) — "
-            "일부 지표의 개선 여부를 모니터링하면서 보유 또는 소규모 분할 접근이 권고됩니다."
-        )
-    else:
-        outlook       = "관망(Sell/Wait)"
-        outlook_eng   = "SELL"
-        outlook_color = "red"
-        outlook_reason = (
-            f"재무 건전성 종합점수 {score:.0f}점(등급: {grade}) — "
-            "재무 리스크가 높아 투자에 신중을 기하고 실적 개선 확인 후 재검토를 권고합니다."
-        )
+    # ── 재무 상태 표기 (CN-046) ──────────────────────────────────────────────
+    # 여기 있던 "매수(Buy)/중립(Hold)/관망(Sell/Wait)" 은 재무 요약이 아니라 행동
+    # 지시라서 R-07 과 정면으로 부딪쳤다. 판정을 services/dart_outlook.py 로 꺼내
+    # **의견이 아니라 상태**를 내게 했다. 꺼낸 이유는 그 파일 docstring 에 있다 —
+    # 요약하면 판정을 직접 넣고 검사할 수 있어야 해서다.
+    status = dart_outlook.assess(score, grade, breakdown)
 
     return {
         "paragraphs":     paragraphs,
-        "outlook":        outlook,
-        "outlook_eng":    outlook_eng,
-        "outlook_color":  outlook_color,
-        "outlook_reason": outlook_reason,
-        "disclaimer":     (
-            "본 분석은 DART 공시 재무제표를 기반으로 한 자동화 AI 분석이며, "
-            "투자 권유가 아닙니다. 실제 투자 판단은 전문가와 상담하시기 바랍니다."
-        ),
+        # outlook_eng 는 없앴다. `BUY`/`SELL` 은 매매 지시 그 자체다
+        # (50-UI/화면-상세.md 4.2절 1번). 쓰던 곳은 화면 한 곳뿐이었다.
+        "outlook":        status["outlook"],
+        "outlook_color":  status["outlook_color"],
+        "outlook_reason": status["outlook_reason"],
+        # 파싱이 실패한 항목을 화면이 `— 자료 없음` 으로 표시할 수 있게 이름을 넘긴다.
+        "missing":        status["missing"],
+        "withheld":       status["withheld"],
+        # 여기 있던 문장("자동화 AI 분석이며, 투자 권유가 아닙니다…")은 이 화면만의
+        # 것이었다. CN-060 이 확정한 공통 문구로 갈아끼운다 — 화면마다 다른 면책이
+        # 붙어 있으면 무엇이 정본인지 알 수 없다.
+        "disclaimer":         dart_outlook.DISCLAIMER,
+        "disclaimer_context": dart_outlook.DISCLAIMER_CONTEXT,
     }
 
 
@@ -2664,7 +2653,11 @@ def dart_financial_analysis(req: DartFinancialAnalysisRequest) -> dict:
         "unit":                 "억원",
     }
 
-    analysis = _generate_dart_analysis(company, market, ratios, score, grade, req.bsns_year)
+    # breakdown 을 넘기는 것은 CN-046 때문이다 — 상태 표기의 이유가 "어느 항목이
+    # 점수를 움직였는가" 라서 항목별 점수가 필요하다. 추가 계산은 없다.
+    analysis = _generate_dart_analysis(
+        company, market, ratios, score, grade, req.bsns_year, breakdown,
+    )
 
     return {
         "company":  {

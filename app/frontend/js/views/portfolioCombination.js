@@ -1,4 +1,5 @@
 import { api } from '../api.js';
+import { disclaimer } from '../components/disclaimer.js';
 
 const EXAMPLES = [
   ['AAPL', 'JNJ'],
@@ -278,7 +279,10 @@ relationship = float(daily_moves.corr().iloc[0, 1])</code></pre>
             <p>${escapeHtml(data.portfolio_hint)}</p>
             <small>이 결과는 과거 가격 흐름을 바탕으로 한 참고 정보이며, 미래 성과를 보장하지 않습니다.</small>
           </article>
-        </div>`;
+        </div>
+        <!-- 화면-상세.md 3.3절이 F04 를 strong 으로 지정했다(A등급 4개 중 하나).
+             위 <small> 은 카드 안의 한정된 주의라 화면 전체를 덮지 못한다. -->
+        ${disclaimer('strong')}`;
     } catch (error) {
       result.innerHTML = `<p class="combination-error">${escapeHtml(error.message || '데이터를 불러오지 못했습니다.')} 종목 코드를 확인한 뒤 다시 시도해 주세요.</p>`;
     } finally {

@@ -1,4 +1,5 @@
 import { apiFetch } from '../api.js';
+import { disclaimer } from '../components/disclaimer.js';
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
@@ -79,7 +80,9 @@ function gaugeHTML(score, grade, verdict) {
 
 function ratioCard(label, value, unit = '%', invert = false, hint = '') {
   const n    = (value !== null && value !== undefined) ? Number(value) : null;
-  const disp = n !== null ? ((n >= 0 ? '' : '') + n.toFixed(1) + unit) : '-';
+  // 결측을 `-` 로 두면 "0 에 가깝다" 로 읽힌다. CN-046 은 결측을 점수가 아니라
+  // 경고로 다루라고 했으므로 무엇이 없는지를 말한다 (화면-상세.md 4.2절 4번).
+  const disp = n !== null ? ((n >= 0 ? '' : '') + n.toFixed(1) + unit) : '— 자료 없음';
   const color = n !== null ? pctColor(n, invert) : '#64748b';
   return `
     <div style="background:#0f172a; border:1px solid #1e293b; border-radius:10px; padding:14px 16px; min-width:120px; flex:1;">
@@ -156,7 +159,10 @@ function finTableHTML(snap, bsns_year) {
 function renderAnalysis(data, container) {
   const { company, financials, ratios, health, analysis, bsns_year } = data;
   const { score, grade, verdict, breakdown } = health;
-  const { outlook, outlook_color, outlook_reason, paragraphs, disclaimer } = analysis;
+  // `disclaimer` 는 꺼내지 않는다 — 같은 이름으로 import 한 컴포넌트 함수를 가린다.
+  // 서버가 보내는 `analysis.disclaimer` 는 이제 프런트 상수와 같은 문장이라
+  // (services/dart_outlook.py 가 services/rag.py 것을 재사용) 화면은 컴포넌트를 쓴다.
+  const { outlook, outlook_color, outlook_reason, paragraphs } = analysis;
 
   const marketBadge = {
     KOSPI:  { label: 'KOSPI', bg: '#1d4ed8', color: '#bfdbfe' },
@@ -164,11 +170,14 @@ function renderAnalysis(data, container) {
     KONEX:  { label: 'KONEX', bg: '#78350f', color: '#fde68a' },
   }[company.market] || { label: company.market, bg: '#374151', color: '#d1d5db' };
 
+  // CN-046. 신호등 3색(green/yellow/red)은 그 자체가 매매 신호로 읽혀서 없앴다.
+  // 서버가 이제 ok · muted · warn 을 준다 (services/dart_outlook.py). 빨강을 쓰지
+  // 않는 것은 의도다 — 재무가 약한 것과 "팔아라" 는 다른 말이다.
   const outlookStyle = {
-    green:  { bg: '#052e16', border: '#16a34a', color: '#4ade80', tag: 'BUY' },
-    yellow: { bg: '#1c1917', border: '#ca8a04', color: '#facc15', tag: 'HOLD' },
-    red:    { bg: '#1c0808', border: '#dc2626', color: '#f87171', tag: 'SELL' },
-  }[outlook_color] || { bg: '#1e293b', border: '#334155', color: '#94a3b8', tag: '??' };
+    ok:    { bg: '#0f221a', border: '#15803d', color: '#86efac' },
+    muted: { bg: '#1e293b', border: '#334155', color: '#cbd5e1' },
+    warn:  { bg: '#231a08', border: '#a16207', color: '#fcd34d' },
+  }[outlook_color] || { bg: '#1e293b', border: '#334155', color: '#94a3b8' };
 
   container.innerHTML = `
     <!-- Company header -->
@@ -213,18 +222,25 @@ function renderAnalysis(data, container) {
       <!-- Right panel -->
       <div style="display:flex; flex-direction:column; gap:14px;">
 
-        <!-- Investment outlook -->
+        <!-- 재무 상태 표기 (CN-046) — 투자의견 배지가 있던 자리다.
+             영문 티커(BUY/SELL)를 없애고, 남은 한글 표기도 본문 글씨 수준으로
+             줄였다. 지금까지는 font-weight:800 + 색 블록이라 화면에서 가장 큰
+             요소였고, 면책은 맨 아래 ※ 로 작게 붙어 있었다. 그 크기 비율이
+             R-07 위반의 절반이었다 (화면-상세.md 4.2절 2 · 5번). -->
         <div style="background:${outlookStyle.bg}; border:1px solid ${outlookStyle.border};
             border-radius:12px; padding:16px 20px;">
-          <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
-            <span style="background:${outlookStyle.border}; color:${outlookStyle.color};
-              font-size:0.85rem; font-weight:800; padding:4px 12px; border-radius:6px;
-              letter-spacing:.06em;">${esc(analysis.outlook_eng)}</span>
-            <span style="font-size:1rem; font-weight:700; color:${outlookStyle.color};">${esc(outlook)}</span>
+          <div style="display:flex; align-items:baseline; gap:8px; margin-bottom:10px; flex-wrap:wrap;">
+            <span style="font-size:0.7rem; color:#64748b; letter-spacing:.04em;">재무 상태</span>
+            <span style="font-size:0.9rem; font-weight:600; color:${outlookStyle.color};">${esc(outlook)}</span>
           </div>
           <p style="font-size:0.82rem; color:${outlookStyle.color}; margin:0; line-height:1.6; opacity:.9;">
             ${esc(outlook_reason)}
           </p>
+          <!-- 면책을 배지 바로 아래로 올린다. 서버가 같은 문장을 응답에도 실어
+               보내므로(main.py `analysis.disclaimer`) 화면을 거치지 않는 경로도
+               덮인다. context 는 서버가 준 것을 그대로 쓴다 — 프런트 상수와
+               갈라지는지는 verify_dart_outlook.py 가 대조한다. -->
+          ${disclaimer('strong', { context: analysis.disclaimer_context || '' })}
         </div>
 
         <!-- Key ratios -->
@@ -255,9 +271,9 @@ function renderAnalysis(data, container) {
             <p style="font-size:0.85rem; color:#cbd5e1; margin:0; line-height:1.7;">${esc(p)}</p>
           </div>`).join('')}
       </div>
-      <p style="font-size:0.72rem; color:#475569; margin:14px 0 0; padding-top:10px; border-top:1px solid #1e293b;">
-        ※ ${esc(disclaimer)}
-      </p>
+      <!-- 여기 있던 `※ 면책` 한 줄은 없앴다. 같은 문장이 위 재무 상태 칸에 strong 으로
+           붙었고, 화면-상세.md 4.2절 5번이 "배지 바로 아래" 를 지정했다. 맨 아래
+           작은 글씨로 한 번 더 쓰면 원래 문제(배지는 크고 면책은 작다)가 남는다. -->
     </div>
 
     <!-- Score breakdown -->
