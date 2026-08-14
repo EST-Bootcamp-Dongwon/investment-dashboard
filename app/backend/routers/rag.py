@@ -1,207 +1,185 @@
-from __future__ import annotations
+"""F27 문서 검색 챗 API — Controller.
 
-import hashlib
-import json
-import math
-import os
-import re
-import urllib.error
-import urllib.request
+**F03·F04·F05·F28 에 이어 3계층을 다섯 번째로 적용한 대상이다.** 이 파일은 경로 선언 ·
+요청 검증 · 도메인 예외를 HTTP 코드로 번역 · 응답 조립만 한다. 청킹·임베딩·답변 조립은
+`services/rag.py`, DB 접근은 `clients/doc_chunk_repo.py`, 외부 모델 호출은
+`clients/rag_llm.py` 에 있다.
+
+## 앞의 넷과 다른 점 — **"저장 경로" 의 모양이 다르다**
+
+F03·F04·F05·F28 은 전부 *사용자가 한 일을 이력으로 남기는* 경로였다. 셋 다 `create` ·
+`history` · `detail` 3종에 소유자가 붙었다. **F27 에는 남길 사용자 이력이 없다.**
+`doc_chunk` 는 질문·답변이 아니라 *색인*이고, 누구의 것도 아닌 참조 데이터다
+(ERD 5.4절 "배치가 채우고 화면이 읽기만").
+
+그래서 이 라우터는 **읽기만 한다.** 쓰기는 두 곳에 있다 —
+`scripts/index_docs_to_supabase.py`(배치, 정본)와 `routers/admin.py`(관리자 화면).
+`owner.resolve_owner` 가 걸릴 자리는 없고, 대신 관리자 경로에 `owner.require_admin`
+이 걸린다.
+
+## Qdrant 를 떠난다 (D-08 · CN-021)
+
+옛 구현은 `QDRANT_URL` 의 컬렉션을 직접 두드렸다. 이제 Supabase pgvector 를 본다.
+그에 따라 두 가지가 바뀌었고 둘 다 화면에 영향이 있다.
+
+① `GET /api/rag/status` 의 `qdrant` 키가 **`vector_store`** 가 됐다. 저장소 이름을
+   응답 스키마에 박아 두면 옮길 때마다 프런트가 거짓말을 하게 된다.
+② `POST /api/rag/search` 를 **삭제했다.** 응답이 `/ask` 의 `sources` 와 같아 추가로
+   주는 정보가 0 이라는 것이 이미 확인돼 삭제가 확정돼 있었다(CN-028 · 기능ID-대장).
+   화면은 이 경로를 부르지 않는다 — `ragChat.js` 는 `/ask` 와 `/status` 만 쓴다.
+
+## 면책 (R-07)
+
+`/ask` 응답에 `disclaimer` · `disclaimer_context` 를 싣는다. 요구 원문이
+*"**AI 답변에는** 교육용 정보이며 개인별 투자 조언이 아니라는 문구를 유지합니다"*
+(`docs/07.md:197`)로 **답변 자체**를 지목하기 때문이다. 화면을 거치지 않고 이 API 를
+직접 부르는 경로에서도 문구가 답변에 붙어 나간다.
+
+문장은 `services/rag.DISCLAIMER` 하나이고, 화면 쪽 사본과 같은지는
+`scripts/verify_rag_api.py` 가 대조한다.
+
+설계 정본: docs/spec/30-데이터/테이블-정의서.md 4.7절 · docs/spec/20-기능명세/06-학습과-AI.md 4절.
+"""
+
+from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+try:
+    from ..clients import doc_chunk_repo, rag_llm, supabase_client
+    from ..services import rag as service
+except ImportError:  # `uvicorn main:app` 를 app/backend 에서 실행하는 경우
+    from clients import doc_chunk_repo, rag_llm, supabase_client  # type: ignore
+    from services import rag as service  # type: ignore
+
 router = APIRouter()
 
-_QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
-_QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "investment_docs")
+_STORE_FAILED = "문서 저장소를 읽을 수 없습니다. 잠시 후 다시 시도해 주세요."
+_NOT_INDEXED = (
+    "학습 문서가 아직 색인되지 않았습니다. "
+    "`python3 scripts/index_docs_to_supabase.py` 로 문서를 먼저 색인하세요."
+)
 
 
-def _qdrant_request(method: str, path: str, payload: dict | None = None) -> dict:
-    url = _QDRANT_URL.rstrip("/") + path
-    data = json.dumps(payload, ensure_ascii=False).encode("utf-8") if payload is not None else None
-    headers = {"Content-Type": "application/json"} if data else {}
-    try:
-        with urllib.request.urlopen(urllib.request.Request(url, data=data, method=method, headers=headers), timeout=10) as response:
-            body = response.read().decode("utf-8")
-            return json.loads(body) if body else {}
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="ignore")
-        raise HTTPException(502, f"Qdrant 오류({exc.code}): {detail[:200]}") from exc
-    except urllib.error.URLError as exc:
-        raise HTTPException(503, f"Qdrant 연결 실패 ({_QDRANT_URL}): {exc.reason}") from exc
+class RagAskRequest(BaseModel):
+    """옛 `RagSearchRequest` + `provider` 다. **제약값을 그대로 옮겼다.**
 
+    `/search` 를 지우면서 상속 관계가 없어졌을 뿐, 필드와 상·하한은 바뀌지 않았다
+    (`query` 1~2000 · `top_k` 1~20 기본 5 · `score_threshold` 0~1 기본 0).
+    """
 
-def _qdrant_available() -> bool:
-    try:
-        with urllib.request.urlopen(_QDRANT_URL.rstrip("/") + "/collections", timeout=3) as response:
-            return response.status == 200
-    except Exception:
-        return False
-
-
-def _qdrant_collection_available() -> bool:
-    """Qdrant 연결과 컬렉션 생성 여부를 분리해 확인한다."""
-    try:
-        with urllib.request.urlopen(f"{_QDRANT_URL.rstrip('/')}/collections/{_QDRANT_COLLECTION}", timeout=3) as response:
-            return response.status == 200
-    except Exception:
-        return False
-
-
-def _hash_embed(text: str, dim: int = 384) -> list[float]:
-    """문서 색인 스크립트와 동일한 의존성 없는 384차원 해시 임베딩."""
-    vector = [0.0] * dim
-    for token in re.findall(r"[0-9A-Za-z가-힣_]+", text.lower()):
-        digest = hashlib.sha256(token.encode("utf-8")).digest()
-        vector[int.from_bytes(digest[:4], "big") % dim] += 1.0 if digest[4] & 1 == 0 else -1.0
-    norm = math.sqrt(sum(value * value for value in vector))
-    return [value / norm for value in vector] if norm else vector
-
-
-def _embed_query(text: str) -> list[float]:
-    try:
-        info = _qdrant_request("GET", f"/collections/{_QDRANT_COLLECTION}")
-        dim = int(info.get("result", {}).get("config", {}).get("params", {}).get("vectors", {}).get("size", 384))
-    except Exception:
-        dim = 384
-    return _hash_embed(text, dim)
-
-
-class RagSearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=2000, description="검색 질문")
     top_k: int = Field(default=5, ge=1, le=20, description="반환할 최대 청크 수")
     score_threshold: float = Field(default=0.0, ge=0.0, le=1.0, description="최소 유사도 점수")
-
-
-class RagAskRequest(RagSearchRequest):
-    provider: str = Field(default="rag", pattern="^(rag|openai_compatible)$", description="답변 다듬기에 사용할 외부 AI 모듈")
-
-
-def _search(query: str, top_k: int, score_threshold: float) -> list[dict[str, object]]:
-    payload: dict[str, object] = {"vector": _embed_query(query), "limit": top_k, "with_payload": True, "with_vector": False}
-    if score_threshold > 0:
-        payload["score_threshold"] = score_threshold
-    result = _qdrant_request("POST", f"/collections/{_QDRANT_COLLECTION}/points/search", payload)
-    return [{
-        "score": round(hit.get("score", 0), 4),
-        "source_doc": hit.get("payload", {}).get("source_doc", ""),
-        "chunk_index": hit.get("payload", {}).get("chunk_index", 0),
-        "text": hit.get("payload", {}).get("text", ""),
-    } for hit in result.get("result", [])]
-
-
-def _require_qdrant() -> None:
-    if not _qdrant_available():
-        raise HTTPException(503, f"Qdrant 서버에 연결할 수 없습니다 ({_QDRANT_URL}). 서버를 실행한 뒤 문서를 색인하세요.")
-    if not _qdrant_collection_available():
-        raise HTTPException(
-            503,
-            "문서 검색용 컬렉션이 아직 없습니다. Docker Compose 환경에서는 "
-            "`docker compose --profile tools run --rm docs-index`로 학습 문서를 먼저 색인하세요.",
-        )
-
-
-def _rag_only_answer(chunks: list[dict[str, object]]) -> str:
-    """검색된 원문만 잘라 정리한다. 생성 모델이나 외부 지식은 사용하지 않는다."""
-    if not chunks:
-        return "관련 문서를 찾지 못했습니다. 다른 표현으로 질문해 보세요."
-    excerpts = []
-    for chunk in chunks[:3]:
-        text = " ".join(str(chunk.get("text", "")).split())
-        if text:
-            excerpts.append(f"• {text[:500]}{'…' if len(text) > 500 else ''}")
-    return "문서에서 찾은 관련 내용입니다. 오른쪽 원문과 함께 확인하세요.\n\n" + "\n\n".join(excerpts)
-
-
-def _openai_compatible_answer(query: str, chunks: list[dict[str, object]]) -> str:
-    """RAG 원문만 근거로 외부 OpenAI 호환 모델이 답변을 다듬도록 한다."""
-    api_key = os.getenv("RAG_LLM_API_KEY")
-    model = os.getenv("RAG_LLM_MODEL")
-    base_url = os.getenv("RAG_LLM_BASE_URL", "https://api.openai.com/v1").rstrip("/")
-    if not api_key or not model:
-        raise HTTPException(503, "외부 AI를 사용하려면 RAG_LLM_API_KEY와 RAG_LLM_MODEL을 설정하세요.")
-
-    context = "\n\n".join(
-        f"[출처 {index + 1}: {chunk.get('source_doc', '')} / 조각 {int(chunk.get('chunk_index', 0)) + 1}]\n{chunk.get('text', '')}"
-        for index, chunk in enumerate(chunks)
-    )[:14000]
-    prompt = (
-        "아래 '검색 원문'만 근거로 사용자의 질문에 한국어로 간결하게 답하세요. "
-        "원문에 없는 사실·숫자·투자 조언을 추가하지 말고, 정보가 부족하면 부족하다고 밝히세요. "
-        "출처 번호를 [출처 1]처럼 표시하고 3개 이내의 짧은 문단 또는 목록으로 정리하세요.\n\n"
-        f"사용자 질문: {query}\n\n검색 원문:\n{context}"
+    provider: str = Field(
+        default="rag",
+        pattern="^(rag|openai_compatible)$",
+        description="답변 다듬기에 사용할 외부 AI 모듈",
     )
-    payload = {
-        "model": model,
-        "messages": [
-            {"role": "system", "content": "당신은 제공된 RAG 문서만 다듬어 설명하는 도우미입니다."},
-            {"role": "user", "content": prompt},
-        ],
-        "temperature": 0.1,
-    }
-    request = urllib.request.Request(
-        f"{base_url}/chat/completions",
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        method="POST",
-        headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"},
-    )
+
+
+def _search(req: RagAskRequest) -> list[dict]:
+    """검색만 한다. 저장소 실패는 503 으로 번역한다."""
     try:
-        with urllib.request.urlopen(request, timeout=30) as response:
-            result = json.loads(response.read().decode("utf-8"))
-        answer = str(result.get("choices", [{}])[0].get("message", {}).get("content", "")).strip()
-        if not answer:
-            raise ValueError("빈 응답")
-        return answer
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="ignore")
-        raise HTTPException(502, f"외부 AI 응답 오류({exc.code}): {detail[:200]}") from exc
-    except (urllib.error.URLError, ValueError, KeyError, IndexError) as exc:
-        raise HTTPException(502, f"외부 AI 응답을 받지 못했습니다: {exc}") from exc
+        rows = doc_chunk_repo.search(
+            service.hash_embed(req.query),
+            match_count=req.top_k,
+            score_threshold=req.score_threshold,
+        )
+    except supabase_client.SupabaseError as exc:
+        raise HTTPException(status_code=503, detail=_STORE_FAILED) from exc
+    return [service.to_source(row) for row in rows]
 
 
-@router.post("/api/rag/search")
-def rag_search(req: RagSearchRequest) -> dict[str, object]:
-    """Qdrant에서 관련 문서 청크를 검색합니다."""
-    _require_qdrant()
-    chunks = _search(req.query, req.top_k, req.score_threshold)
-    return {"query": req.query, "embed_method": "hash", "count": len(chunks), "results": chunks}
+def _assert_indexed() -> None:
+    """검색이 0건일 때만 부른다 — **"색인이 없다" 와 "안 걸렸다" 를 가른다.**
+
+    둘은 사용자가 할 일이 완전히 다르다. 색인이 없으면 관리자에게 말해야 하고, 그냥
+    안 걸린 것이면 질문을 바꿔 보면 된다. 옛 구현은 요청마다 컬렉션 존재를 먼저 물어
+    이 둘을 갈랐는데(`_require_qdrant`), 그러면 **모든 질문이 왕복을 하나 더 한다.**
+    0건일 때만 확인하면 평상시 비용이 0 이다.
+    """
+    try:
+        total = doc_chunk_repo.total_chunks()
+    except supabase_client.SupabaseError as exc:
+        raise HTTPException(status_code=503, detail=_STORE_FAILED) from exc
+    if total == 0:
+        raise HTTPException(status_code=503, detail=_NOT_INDEXED)
 
 
 @router.post("/api/rag/ask")
 def rag_ask(req: RagAskRequest) -> dict[str, object]:
-    """RAG 검색 결과만으로 답변을 만들고, 선택 시 외부 AI로 문장만 다듬습니다."""
-    _require_qdrant()
-    chunks = _search(req.query, req.top_k, req.score_threshold)
-    answer = _rag_only_answer(chunks) if req.provider == "rag" else _openai_compatible_answer(req.query, chunks)
+    """학습 문서에서 근거를 찾아 답하고, 선택 시 외부 AI 로 문장만 다듬습니다."""
+    sources = _search(req)
+    if not sources:
+        _assert_indexed()
+
+    if req.provider == "rag" or not sources:
+        # 근거가 0건이면 외부 모델을 부르지 않는다. 다듬을 원문이 없는데 부르면
+        # 모델이 자기 지식으로 투자 이야기를 지어내고, 그것이 R-07 이 막으려는 바로
+        # 그 상황이다 — 옛 구현은 빈 컨텍스트로도 호출했다.
+        answer = service.compose_answer(sources)
+    else:
+        try:
+            answer = rag_llm.complete(service.build_llm_prompt(req.query, sources))
+        except rag_llm.RagLlmNotConfigured as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except rag_llm.RagLlmError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+
     return {
         "query": req.query,
         "answer": answer,
         "provider": req.provider,
-        "embed_method": "hash",
-        "sources": chunks,
-        "source_count": len(chunks),
+        # 하드코딩이 아니라 서비스 상수를 읽는다. 옛 구현은 문자열 'hash' 를 세 곳에
+        # 박아 두어(`rag.py:168,181,206`) 임베딩을 바꾸면 응답이 거짓이 됐다.
+        "embed_method": service.EMBED_METHOD,
+        "sources": sources,
+        "source_count": len(sources),
+        "disclaimer": service.DISCLAIMER,
+        "disclaimer_context": service.DISCLAIMER_CONTEXT,
     }
 
 
 @router.get("/api/rag/status")
 def rag_status() -> dict[str, object]:
-    """Qdrant 연결 상태와 컬렉션 정보를 반환합니다."""
-    available = _qdrant_available()
-    collection_available = available and _qdrant_collection_available()
-    info: dict[str, object] = {}
-    if collection_available:
-        try:
-            result = _qdrant_request("GET", f"/collections/{_QDRANT_COLLECTION}").get("result", {})
-            info = {
-                "points_count": result.get("points_count", 0),
-                "vector_size": result.get("config", {}).get("params", {}).get("vectors", {}).get("size"),
-                "status": result.get("status", "unknown"),
+    """문서 저장소 연결과 색인 현황을 반환합니다.
+
+    **여기서는 예외를 던지지 않는다.** 화면이 배지를 그리려고 부르는 경로라, 저장소가
+    죽었을 때 503 을 주면 화면이 상태를 표시할 방법 자체를 잃는다. 실패는 `available:
+    false` 라는 *상태*로 돌려준다 — 이것이 옛 구현의 판단이었고(`_qdrant_available`
+    이 예외를 삼켰다) 그대로 유지한다.
+    """
+    documents: list[dict[str, object]] = []
+    available = True
+    try:
+        documents = [
+            {
+                "source_doc": row.get("source_doc"),
+                "chunk_count": int(row.get("chunk_count") or 0),
+                "embed_method": row.get("embed_method"),
+                "indexed_at": row.get("indexed_at"),
             }
-        except Exception:
-            info = {"error": "컬렉션이 없거나 조회 실패"}
+            for row in doc_chunk_repo.stats()
+        ]
+    except supabase_client.SupabaseError:
+        available = False
+
+    total = sum(int(row["chunk_count"]) for row in documents)  # type: ignore[arg-type]
     return {
-        "qdrant": {"available": available, "collection_available": collection_available, "url": _QDRANT_URL, "collection": _QDRANT_COLLECTION, **info},
-        "external_ai": {"openai_compatible_available": bool(os.getenv("RAG_LLM_API_KEY") and os.getenv("RAG_LLM_MODEL"))},
-        "embed_method": "hash",
+        "vector_store": {
+            "store": "supabase-pgvector",
+            "available": available,
+            # `indexed` 를 따로 두는 이유는 "붙었는데 비어 있다" 가 별개 상태이기
+            # 때문이다. 옛 `collection_available` 이 하던 구분과 같은 자리다.
+            "indexed": available and total > 0,
+            "total_chunks": total,
+            "document_count": len(documents),
+            "documents": documents,
+        },
+        "external_ai": {"openai_compatible_available": rag_llm.is_configured()},
+        "embed_method": service.EMBED_METHOD,
+        "disclaimer": service.DISCLAIMER,
+        "disclaimer_context": service.DISCLAIMER_CONTEXT,
     }

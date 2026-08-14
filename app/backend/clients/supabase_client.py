@@ -139,6 +139,44 @@ def insert(
     return rows if isinstance(rows, list) else []
 
 
+def insert_many(table: str, rows: list[dict[str, Any]]) -> int:
+    """여러 행을 **요청 하나로** 넣고 넣은 행 수를 돌려준다.
+
+    `insert()` 와 따로 두는 이유는 두 가지다.
+
+    ① **트랜잭션 경계가 다르다.** PostgREST 는 요청 하나가 트랜잭션 하나이므로,
+       178행을 한 요청으로 보내면 전부 들어가거나 전부 안 들어간다. `insert()` 를
+       178번 부르면 트랜잭션이 178개로 쪼개져 중간에 끊긴 색인이 남는다.
+    ② `insert()` 의 인자가 dict 한 개라는 계약을 흐리지 않기 위해서다. list 를 넣어도
+       우연히 동작하지만, 그러면 반환값의 의미가 호출자마다 달라진다.
+
+    빈 리스트는 요청을 보내지 않고 0 을 돌려준다 — PostgREST 에 빈 배열을 보내면
+    400 이 온다.
+
+    F27 색인이 첫 사용처다. `return=minimal` 로 보내는 것은 넣은 행을 되돌려받을 이유가
+    없기 때문이다 — 벡터 384개짜리 행 178개를 응답으로 다시 받으면 수 MB 다.
+    """
+    if not rows:
+        return 0
+    url = f"{_base_url()}/rest/v1/{urllib.parse.quote(table)}"
+    headers = {**_rest_headers(), "Prefer": "return=minimal"}
+    _request("POST", url, headers=headers, body=rows)
+    return len(rows)
+
+
+def delete(table: str, params: dict[str, str]) -> None:
+    """조건에 맞는 행을 지운다. `params` 는 PostgREST 질의 문법 그대로다.
+
+    **조건이 비어 있으면 거부한다.** PostgREST 는 필터 없는 DELETE 를 테이블 전체
+    삭제로 처리한다. 오타 한 번에 색인이 통째로 날아가는 경로를 열어 두지 않는다.
+    """
+    if not params:
+        raise SupabaseError("조건 없는 DELETE 는 허용하지 않습니다.")
+    query = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)
+    url = f"{_base_url()}/rest/v1/{urllib.parse.quote(table)}?{query}"
+    _request("DELETE", url, headers={**_rest_headers(), "Prefer": "return=minimal"})
+
+
 def select(table: str, params: dict[str, str]) -> list[dict[str, Any]]:
     """PostgREST 조회. `params` 는 PostgREST 질의 문법 그대로다."""
     query = urllib.parse.urlencode(params, quote_via=urllib.parse.quote)

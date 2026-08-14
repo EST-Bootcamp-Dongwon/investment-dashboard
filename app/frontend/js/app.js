@@ -35,6 +35,7 @@ import { technicalChartView }  from './views/technicalChart.js';
 import { financialKnowledgeView } from './views/financialKnowledge.js';
 import { investmentTreeView }   from './views/investmentTree.js';
 import { ragChatView } from './views/ragChat.js';
+import { adminRagIndexView } from './views/adminRagIndex.js';
 import { companyFinancialView } from './views/companyFinancial.js';
 import { taxAccountingView }         from './views/taxAccounting.js';
 import { dartFinancialAnalysisView } from './views/dartFinancialAnalysis.js';
@@ -88,6 +89,7 @@ const routes = {
   'tax-accounting':              { label: '세무·회계 시뮬레이션',         render: () => taxAccountingView(app) },
   'dart-financial-analysis':    { label: 'DART 재무 AI 분석',             render: () => dartFinancialAnalysisView(app) },
   'rag-chat':            { label: '문서 검색 채팅',              render: () => ragChatView(app) },
+  'admin-rag-index':     { label: '관리자 · 문서 색인',        render: () => adminRagIndexView(app) },
 };
 
 const PRACTICE_GUIDES = {

@@ -109,6 +109,7 @@ try:
     from .routers.combination import router as combination_router
     from .routers.tax import router as tax_router
     from .routers.rag import router as rag_router
+    from .routers.admin import router as admin_router
     from .routers.backtest_lab import router as backtest_lab_router
 except ImportError:  # Allows `uvicorn main:app` from app/backend.
     from routers.ml import router as ml_router  # type: ignore
@@ -118,6 +119,7 @@ except ImportError:  # Allows `uvicorn main:app` from app/backend.
     from routers.combination import router as combination_router  # type: ignore
     from routers.tax import router as tax_router  # type: ignore
     from routers.rag import router as rag_router  # type: ignore
+    from routers.admin import router as admin_router  # type: ignore
     from routers.backtest_lab import router as backtest_lab_router  # type: ignore
 app.include_router(ml_router)
 app.include_router(quant_router)
@@ -2690,6 +2692,7 @@ def dart_financial_analysis(req: DartFinancialAnalysisRequest) -> dict:
 
 app.include_router(tax_router)
 app.include_router(rag_router)
+app.include_router(admin_router)
 install_openapi(app)
 
 # ─────────────────────────────────────────────────────────────────────────────

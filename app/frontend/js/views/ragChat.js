@@ -1,3 +1,5 @@
+import { disclaimer, DISCLAIMER_CONTEXT } from '../components/disclaimer.js';
+
 const EXAMPLES = ['PER과 PBR의 차이를 알려줘', 'ETF 괴리율은 왜 생기나요?', '지정가 주문과 시장가 주문의 차이는?', '분산투자의 목적은 무엇인가요?'];
 
 function escapeHtml(value) {
@@ -32,6 +34,12 @@ export function ragChatView(app) {
         <div class="rag-chat-heading-copy">
           <h2><i class="fa-solid fa-comments"></i>문서 검색 채팅</h2>
           <p>RAG가 학습 문서에서 관련 조각을 찾습니다. 답변은 검색된 원문만 정리하며, 원문은 오른쪽에서 확인할 수 있습니다.</p>
+          <!-- R-07 · CN-060 1순위 적용 대상. 질문을 던지기 *전에도* 보이도록 헤딩 바로 아래에 둔다 —
+               답변 말풍선에 붙이면 첫 화면에는 아무 문구도 없다.
+               문장은 components/disclaimer.js 가 정본이고, 같은 문장이 서버 응답의
+               disclaimer 필드로도 나간다(services/rag.py). 두 사본이 같은지는
+               scripts/verify_rag_api.py 가 대조한다. -->
+          ${disclaimer('strong', { context: DISCLAIMER_CONTEXT.F27 })}
         </div>
         <div class="rag-chat-controls">
           <label for="rag-provider">답변 다듬기</label>
@@ -92,10 +100,15 @@ export function ragChatView(app) {
       providerNote.textContent = externalAiAvailable
         ? '외부 AI를 선택해도 검색 원문만 전달해 문장을 다듬습니다.'
         : '외부 AI가 설정되지 않아 RAG 검색 결과만 사용합니다.';
-      if (data.qdrant?.collection_available) {
+      // 저장소가 Qdrant → Supabase pgvector 로 바뀌면서 응답 키가 `qdrant` 에서
+      // `vector_store` 가 됐다(D-08 · CN-021). 저장소 이름을 스키마에 박아 두면
+      // 옮길 때마다 화면이 거짓말을 한다. `collection_available` → `indexed`,
+      // `points_count` → `total_chunks` 도 같은 이유로 이름이 바뀌었다.
+      const store = data.vector_store;
+      if (store?.indexed) {
         status.className = 'badge badge-green';
-        status.textContent = `문서 ${Number(data.qdrant.points_count || 0).toLocaleString()}개 청크 연결됨`;
-      } else if (data.qdrant?.available) {
+        status.textContent = `문서 ${Number(store.total_chunks || 0).toLocaleString()}개 청크 연결됨`;
+      } else if (store?.available) {
         status.className = 'badge badge-gray';
         status.textContent = '문서 색인 필요';
         providerNote.textContent = '학습 문서가 아직 색인되지 않았습니다. 관리자에게 문서 색인을 요청하세요.';

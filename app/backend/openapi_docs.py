@@ -17,7 +17,8 @@ TAG_DESCRIPTIONS = [
     {"name": "퀀트", "description": "교육 목적의 백테스트, 포트폴리오, 리스크 및 분석 파이프라인 API입니다. 투자 권유나 실제 주문 기능은 제공하지 않습니다."},
     {"name": "머신러닝", "description": "합성 데이터 기반의 ML/DL·NLP 실습 결과와 시각화 데이터를 반환합니다."},
     {"name": "세무", "description": "거래내역 파일을 읽고 교육용 세금·회계 시뮬레이션을 수행합니다. 실제 신고 금액으로 사용하면 안 됩니다."},
-    {"name": "RAG", "description": "Qdrant에 색인된 학습 문서의 유사도 검색 API입니다. 기본 답변은 검색 문서만 정리하며, 선택적으로 외부 AI가 같은 검색 원문만 문장 다듬기에 사용합니다."},
+    {"name": "RAG", "description": "Supabase pgvector에 색인된 학습 문서의 유사도 검색 API입니다. 기본 답변은 검색 문서만 정리하며, 선택적으로 외부 AI가 같은 검색 원문만 문장 다듬기에 사용합니다. 답변은 교육용이며 개인별 투자 조언이 아닙니다."},
+    {"name": "관리자", "description": "학습 문서 색인을 운영합니다. `app_admin`에 등록된 계정의 액세스 토큰이 필요하며, 명단을 확인할 수 없으면 통과시키지 않고 503을 반환합니다."},
     {"name": "파일", "description": "서버가 생성한 실습 산출물을 내려받습니다."},
 ]
 
@@ -32,6 +33,11 @@ FRONTEND_API_PATHS = frozenset({
     "/api/recommendation/create",
     "/api/recommendation/history",
     "/api/recommendation/detail",
+    "/api/rag/ask",
+    "/api/rag/status",
+    "/api/admin/rag/documents",
+    "/api/admin/rag/reindex",
+    "/api/admin/rag/documents/{source_doc}",
     "/api/dart/company-search",
     "/api/dart/group-network",
     "/api/dart/company-list",
@@ -129,9 +135,11 @@ OPERATION_DOCS: dict[str, tuple[str, str, str]] = {
     "/api/tax/upload": ("세무", "거래내역 파일 업로드", "CSV 또는 Excel 은행거래 파일을 multipart/form-data `file`로 업로드하면 컬럼을 추정해 표준 거래내역으로 변환합니다. 최대 500건을 반환합니다."),
     "/api/tax/sample": ("세무", "세무 시뮬레이션 예제 거래", "세무 시뮬레이션을 시험할 수 있도록 재현 가능한 가상 거래내역을 반환합니다."),
     "/api/tax/simulate": ("세무", "세금·회계 시뮬레이션", "거래내역을 수입·비용으로 분류하고 소득세/법인세, 부가세 및 월별 집계를 계산합니다. 교육용 단순화 계산이므로 실제 세무 신고에 사용하면 안 됩니다."),
-    "/api/rag/search": ("RAG", "학습 문서 유사도 검색", "질문을 의존성 없는 해시 임베딩으로 변환해 Qdrant에서 관련 청크를 찾습니다. `score_threshold`를 높이면 낮은 유사도 결과를 제외합니다."),
-    "/api/rag/ask": ("RAG", "관련 학습 문서 찾기", "기본적으로 검색 문서 청크만 정리해 답변합니다. `provider=openai_compatible`을 선택하면 설정된 외부 AI가 같은 원문만 문장 다듬기에 사용합니다. Qdrant가 준비되지 않으면 503입니다."),
-    "/api/rag/status": ("RAG", "RAG 저장소 상태", "Qdrant 연결 가능 여부, URL, 컬렉션, 포인트 수와 벡터 차원을 반환합니다."),
+    "/api/rag/ask": ("RAG", "관련 학습 문서 찾기", "질문을 해시 임베딩(384차원)으로 바꿔 Supabase pgvector에서 관련 청크를 찾고, 검색된 원문만 정리해 답변합니다. `provider=openai_compatible`을 선택하면 설정된 외부 AI가 같은 원문만 문장 다듬기에 사용합니다. 근거가 0건이면 외부 AI를 부르지 않습니다. 응답에는 교육용이며 개인별 투자 조언이 아니라는 `disclaimer`가 항상 함께 나갑니다. 색인이 비어 있으면 503입니다."),
+    "/api/rag/status": ("RAG", "문서 저장소 상태", "Supabase pgvector 연결 여부, 색인 여부, 총 청크 수, 문서별 색인 현황을 반환합니다. 저장소가 죽어도 200으로 상태를 알립니다."),
+    "/api/admin/rag/documents": ("관리자", "문서 색인 현황", "저장소의 `docs/*.md`와 DB 색인을 대조해 문서별 상태(indexed·missing·orphan)를 반환합니다. `app_admin`에 등록된 계정만 사용할 수 있습니다."),
+    "/api/admin/rag/reindex": ("관리자", "문서 재색인", "문서를 다시 잘라 임베딩하고 색인을 갈아 끼웁니다. `source_doc`을 주면 그 문서만, 비우면 전부입니다. 문서 단위로 지우고 다시 넣으므로 짧아진 문서의 옛 청크가 남지 않습니다."),
+    "/api/admin/rag/documents/{source_doc}": ("관리자", "문서 색인 삭제", "색인에서 문서 한 편을 지웁니다. 저장소의 문서 파일은 지우지 않습니다. 파일이 없어진 뒤 남은 색인(orphan)을 정리하는 용도입니다."),
 }
 
 
