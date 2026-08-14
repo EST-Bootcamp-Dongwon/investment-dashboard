@@ -38,6 +38,16 @@ F03·F04·F05·F28 은 전부 *사용자가 한 일을 이력으로 남기는* �
 문장은 `services/rag.DISCLAIMER` 하나이고, 화면 쪽 사본과 같은지는
 `scripts/verify_rag_api.py` 가 대조한다.
 
+## 후속 질문 (R-04 · CN-128)
+
+`/ask` 응답에 `followups` · `followups_head` 를 싣는다. **답변 문자열에 섞지 않는
+이유**는 `answer` 가 "원문에서 온 것" 이라는 보증을 지키기 위해서다 — 섞으면 어느
+문장이 원문에서 왔는지 사용자도 검증 스크립트도 가를 수 없다. 필드를 나누면
+`answer` 는 원문 전용, `followups` 는 규칙 전용이 되어 경계가 스키마에서 강제된다.
+
+계산은 `services/rag.build_followups` 이고 **DB 왕복이 늘지 않는다** — `_search` 가
+이미 받아 둔 풀을 그대로 본다. 늘어나는 것은 그 한 번의 요청이 가져오는 행 수다.
+
 설계 정본: docs/spec/30-데이터/테이블-정의서.md 4.7절 · docs/spec/20-기능명세/06-학습과-AI.md 4절.
 """
 
@@ -79,17 +89,35 @@ class RagAskRequest(BaseModel):
     )
 
 
-def _search(req: RagAskRequest) -> list[dict]:
-    """검색만 한다. 저장소 실패는 503 으로 번역한다."""
+def _search(req: RagAskRequest) -> tuple[list[dict], list[dict]]:
+    """검색만 한다. 저장소 실패는 503 으로 번역한다.
+
+    **왕복은 여전히 1회다.** `match_count` 만 `FOLLOWUP_POOL` 까지 키워, 화면에 싣는
+    상위 `top_k` 와 후속 질문이 뒤질 넓은 풀을 한 요청으로 함께 받는다.
+
+    풀을 키우는 이유는 해시 검색이 관련 청크를 상위로 못 올리기 때문이다(CN-015 ·
+    CN-129). 후속 질문은 **질의와 어간이 겹치는 후보만** 고르므로(`build_followups`
+    의 관문), 좁은 풀에서는 겹치는 것이 아예 안 잡힌다.
+
+    **풀 크기별 커버리지 표와 60 을 고른 근거는 변경노트 CN-128 에 한 벌만 있다.**
+    여기에 복제하지 않는다 — 같은 표를 두 곳에 적었더니 값이 갈렸다(CN-121 과 같은 부류).
+    요지만 적으면: 풀을 안 키우면 커버리지가 3분의 1로 떨어지고, 전체(178행)를 받으면
+    payload 가 353KB 가 된다. 60 은 그 사이의 절충이고 **검색이 고장 나 있는 동안의
+    보상값**이라, CN-021 로 의미 검색이 들어오면 낮춰야 한다.
+
+    `RagAskRequest.top_k` 의 상한(`le=20`)은 *응답에 싣는 개수* 제한이라 그대로 두고
+    풀만 서비스 상수로 분리했다. 돌려주는 것은 `(응답용 top_k, 후속질문용 풀)` 이다.
+    """
     try:
         rows = doc_chunk_repo.search(
             service.hash_embed(req.query),
-            match_count=req.top_k,
+            match_count=max(req.top_k, service.FOLLOWUP_POOL),
             score_threshold=req.score_threshold,
         )
     except supabase_client.SupabaseError as exc:
         raise HTTPException(status_code=503, detail=_STORE_FAILED) from exc
-    return [service.to_source(row) for row in rows]
+    pool = [service.to_source(row) for row in rows]
+    return pool[: req.top_k], pool
 
 
 def _assert_indexed() -> None:
@@ -111,7 +139,7 @@ def _assert_indexed() -> None:
 @router.post("/api/rag/ask")
 def rag_ask(req: RagAskRequest) -> dict[str, object]:
     """학습 문서에서 근거를 찾아 답하고, 선택 시 외부 AI 로 문장만 다듬습니다."""
-    sources = _search(req)
+    sources, pool = _search(req)
     if not sources:
         _assert_indexed()
 
@@ -139,6 +167,15 @@ def rag_ask(req: RagAskRequest) -> dict[str, object]:
         "source_count": len(sources),
         "disclaimer": service.DISCLAIMER,
         "disclaimer_context": service.DISCLAIMER_CONTEXT,
+        # 후속 질문은 **답변이 아니라 메타데이터**다. `answer` 는 원문 전용으로 두고
+        # 규칙 계산 결과를 별개 필드로 내보내면, "이 문장은 원문에서 왔는가" 의 경계가
+        # 타입 수준에서 갈린다. 계산이 provider 분기 **밖**이라 두 갈래가 같은 함수·
+        # 같은 입력을 타고, 모드에 따라 화면이 달라질 구조적 여지가 없다 (R-04 · CN-128).
+        #
+        # 넘기는 것은 `sources`(top_k) 가 아니라 `pool`(최대 FOLLOWUP_POOL) 이다 —
+        # 좁은 쪽을 주면 관문을 통과하는 후보가 크게 줄어든다 (CN-128 의 표).
+        "followups": service.build_followups(req.query, pool),
+        "followups_head": service.FOLLOWUP_HEAD,
     }
 
 

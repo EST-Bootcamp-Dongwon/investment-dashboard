@@ -13,6 +13,8 @@ function formatText(value) {
 export function ragChatView(app) {
   const messages = [];
   let sources = [];
+  let followups = [];
+  let followupsHead = '';
   let provider = 'rag';
   let externalAiAvailable = false;
 
@@ -26,6 +28,22 @@ export function ragChatView(app) {
         <p class="rag-source-name">${escapeHtml(source.source_doc)} · 문서 조각 ${Number(source.chunk_index) + 1}</p>
         <p class="rag-source-text">${formatText(source.text)}</p>
       </article>`).join('');
+  }
+
+  // 후속 질문 (R-04 · CN-128). 서버가 검색된 원문에서 규칙으로 뽑아 준 문자열이다.
+  // 버튼 텍스트와 data-query 양쪽에 escapeHtml 을 건다 — .rag-example 버튼이 이미
+  // 쓰는 것과 정확히 같은 이중 이스케이프다. formatText 는 쓰지 않는다: 한 줄 질문이라
+  // <br> 변환이 필요 없고, HTML 을 만드는 경로를 하나 줄인다.
+  //
+  // 후보가 없으면 빈 문자열이다 — 껍데기만 있는 블록을 그리지 않는다. 서버가 질의와
+  // 어휘가 겹치는 것만 고르므로(services/rag.build_followups 의 관문) 빈 경우가 실제로 있다.
+  function renderFollowups() {
+    if (!followups.length) return '';
+    return `
+      <div class="rag-followups" aria-label="${escapeHtml(followupsHead)}">
+        <span class="rag-followups-label">${escapeHtml(followupsHead)}</span>
+        ${followups.map((question) => `<button type="button" class="btn btn-secondary btn-sm rag-followup" data-query="${escapeHtml(question)}">${escapeHtml(question)}</button>`).join('')}
+      </div>`;
   }
 
   function render() {
@@ -55,6 +73,7 @@ export function ragChatView(app) {
         <section class="card rag-chat-panel">
           <div id="rag-messages" class="rag-messages" aria-live="polite">
             ${messages.length ? messages.map((message) => `<div class="rag-message is-${message.role}">${formatText(message.text)}</div>`).join('') : '<div class="rag-welcome"><strong>무엇이 궁금한가요?</strong><br>예: “ETF 괴리율은 왜 생기나요?”</div>'}
+            ${renderFollowups()}
           </div>
           <div class="rag-chat-compose">
             <div class="rag-examples">${EXAMPLES.map((example) => `<button type="button" class="btn btn-secondary btn-sm rag-example" data-query="${escapeHtml(example)}">${escapeHtml(example)}</button>`).join('')}</div>
@@ -74,6 +93,7 @@ export function ragChatView(app) {
     messagesEl.scrollTop = messagesEl.scrollHeight;
     app.querySelector('#rag-provider').addEventListener('change', (event) => { provider = event.target.value; });
     app.querySelectorAll('.rag-example').forEach((button) => button.addEventListener('click', () => ask(button.dataset.query)));
+    app.querySelectorAll('.rag-followup').forEach((button) => button.addEventListener('click', () => ask(button.dataset.query)));
     app.querySelector('#rag-form').addEventListener('submit', (event) => {
       event.preventDefault();
       const input = app.querySelector('#rag-input');
@@ -121,6 +141,11 @@ export function ragChatView(app) {
 
   async function ask(query) {
     if (!query) return;
+    // 로딩 렌더와 에러 경로 양쪽에서 직전 질의의 제안이 남지 않게 **fetch 전에** 비운다.
+    // 후속 질문은 답변 말풍선 바로 아래라 "이 답변의 후속" 으로 읽히므로, 남으면
+    // 화면이 거짓말을 한다.
+    followups = [];
+    followupsHead = '';
     messages.push({ role: 'user', text: query }, { role: 'assistant loading', text: '문서에서 찾는 중…' });
     render();
     try {
@@ -133,6 +158,8 @@ export function ragChatView(app) {
       messages.pop();
       if (!response.ok) throw new Error(data.detail || '문서 검색에 실패했습니다.');
       sources = data.sources || [];
+      followups = Array.isArray(data.followups) ? data.followups : [];
+      followupsHead = data.followups_head || '';
       messages.push({ role: 'assistant', text: data.answer || '관련 문서를 찾지 못했습니다.' });
     } catch (error) {
       messages.pop();

@@ -239,6 +239,17 @@ def verify_disclaimer() -> None:
     check("② ragChat.js 가 면책 컴포넌트를 부른다", "ragChat.js", True,
           "disclaimer('strong'" in rag_chat)
 
+    # 후속 질문이 화면까지 갔는지 (R-04 · CN-128). 서버가 필드를 실어도 화면이 읽지
+    # 않으면 요구는 충족되지 않는다.
+    check("② ragChat.js 가 data.followups 를 읽는다", "ragChat.js", True,
+          "data.followups" in rag_chat)
+    check("② ragChat.js 가 followups_head 를 읽는다", "ragChat.js", True,
+          "data.followups_head" in rag_chat)
+    # 제안 문자열은 색인 원문에서 왔다. 버튼 텍스트와 data-query 양쪽을 이스케이프하는지.
+    followup_button = re.search(r"rag-followup\"[^`]*?</button>", rag_chat)
+    check("② 후속 질문 버튼이 escapeHtml 을 쓴다", "ragChat.js", 2,
+          len(re.findall(r"escapeHtml\(question\)", followup_button.group(0) if followup_button else "")))
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ③ 왕복 — status · ask · DB 백스톱
@@ -283,7 +294,7 @@ def verify_runtime() -> None:
     check("③ ask 200", "POST /api/rag/ask", 200, response.status_code)
     check("③ 응답 키 집합", "ask", {
         "query", "answer", "provider", "embed_method", "sources", "source_count",
-        "disclaimer", "disclaimer_context",
+        "disclaimer", "disclaimer_context", "followups", "followups_head",
     }, set(body))
     check("③ embed_method 가 하드코딩이 아니다", "ask.embed_method", service.EMBED_METHOD,
           body["embed_method"])
@@ -293,6 +304,38 @@ def verify_runtime() -> None:
     check("③ 답변에 면책이 동봉된다", "ask.disclaimer", service.DISCLAIMER, body["disclaimer"])
     check("③ 답변에 context 가 동봉된다", "ask.disclaimer_context", service.DISCLAIMER_CONTEXT,
           body["disclaimer_context"])
+
+    # ── 후속 질문 (R-04 · CN-128) — 원격을 거쳐 돌아온 값으로 확인한다 ────────
+    check("③ followups 가 전부 물음표로 끝난다", "ask.followups", [],
+          [q for q in body["followups"] if not str(q).endswith("?")])
+    check("③ followups 가 상한 이하", "ask.followups", True,
+          len(body["followups"]) <= service.FOLLOWUP_MAX)
+    check("③ followups 에 금칙어가 없다", "ask.followups", [],
+          [q for q in body["followups"] if service.followup_banned_hit(str(q))])
+    check("③ followups_head 가 서비스 상수와 같다", "ask.followups_head", service.FOLLOWUP_HEAD,
+          body["followups_head"])
+
+    # ── 배선을 실제로 고정한다 ────────────────────────────────────────────────
+    #
+    # 위 검사들은 `followups` 가 **빈 배열이어도 전부 통과한다** — "물음표로 끝난다"
+    # 도 "금칙어가 없다" 도 빈 목록에서 참이다. 실제로 질의 `분산투자` 는 관문을 통과하는
+    # 후보가 없어 `[]` 다. 그래서 제안이 실제로 나오는 질의로 한 번 더 두드려
+    # **비어 있지 않은 경로**를 고정한다. 이것이 없으면 `build_followups` 를 통째로
+    # 지워도 ③ 이 초록으로 뜬다.
+    질의 = "배당은 언제 받나요?"
+    rich = client.post("/api/rag/ask", json={"query": 질의, "top_k": 5}).json()
+    check("③ 제안이 나오는 질의는 실제로 나온다", "ask.followups", True,
+          len(rich["followups"]) >= 1, extra=f" ({len(rich['followups'])}개)")
+    check("③ 그 제안도 전부 물음표로 끝난다", "ask.followups", [],
+          [q for q in rich["followups"] if not str(q).endswith("?")])
+
+    # `match_count = max(top_k, FOLLOWUP_POOL)` 이 정말 도는가. top_k=1 이면 응답의
+    # `sources` 는 1개인데, 계산이 `sources` 가 아니라 `pool` 을 보므로 제안은 그대로
+    # 나와야 한다. `pool` → `sources` 로 되돌리는 회귀가 여기서 잡힌다.
+    narrow = client.post("/api/rag/ask", json={"query": 질의, "top_k": 1}).json()
+    check("③ top_k=1 이어도 sources 는 1개", "ask.source_count", 1, narrow["source_count"])
+    check("③ top_k=1 이어도 제안은 풀에서 나온다", "ask.followups", rich["followups"],
+          narrow["followups"])
 
     # ── DB 백스톱 — 라우터가 준 원문이 진짜 그 행인가 ─────────────────────────
     if body["sources"]:
@@ -312,6 +355,8 @@ def verify_runtime() -> None:
     check("③ 임계값 0.99 면 0건", "ask.score_threshold", 0, high.json()["source_count"])
     check("③ 0건이어도 200", "POST /api/rag/ask", 200, high.status_code)
     check("③ 0건이면 안내 문장", "ask.answer", service.ANSWER_EMPTY, high.json()["answer"])
+    # 근거가 0건이면 제안도 0개다. 근거 없이 질문을 붙이면 ANSWER_EMPTY 와 모순된다.
+    check("③ 근거 0건이면 followups 도 0개", "ask.followups", [], high.json()["followups"])
 
     # ── 외부 AI 경로 — 네트워크 없이 경계를 치환해서 밟는다 ────────────────────
     original = rag_llm.complete
@@ -330,6 +375,13 @@ def verify_runtime() -> None:
         check("③ 외부 AI 경로 200", "POST /api/rag/ask", 200, response.status_code)
         check("③ 외부 AI 답변이 그대로 나온다", "ask.answer", "가짜 외부 AI 답변", body["answer"])
         check("③ 외부 AI 에도 면책이 붙는다", "ask.disclaimer", service.DISCLAIMER, body["disclaimer"])
+        # **모드 무관성** — 후속 질문 계산이 provider 분기 밖에 있으므로 두 갈래가
+        # 같은 값을 내야 한다. 갈리면 화면이 모드에 따라 다른 말을 하게 된다 (CN-128).
+        plain = client.post("/api/rag/ask", json={"query": "분산투자", "top_k": 2}).json()
+        check("③ 두 provider 의 followups 가 같다", "ask.followups", plain["followups"],
+              body["followups"])
+        check("③ 외부 AI 답변에도 followups 가 붙는다", "ask.followups", True,
+              "followups" in body)
         check("③ 프롬프트에 출처가 들어간다", "build_llm_prompt", True,
               "[출처 1:" in seen.get("prompt", ""))
         # 근거가 0건이면 외부 모델을 부르지 않는다 — 지어내기를 막는 자리다.
@@ -499,23 +551,216 @@ def cleanup() -> None:
             print(f"[WARN] 계정 {user_id} 정리 실패: {exc}")
 
 
-def main() -> int:
-    if not supabase_client.is_configured():
-        print(
-            "[ERROR] SUPABASE_URL · SUPABASE_SERVICE_ROLE_KEY 가 없습니다.\n"
-            f"        저장소 루트의 .env 에 두 값을 넣고 다시 실행하세요 ({ROOT / '.env'})."
-        )
-        return 1
+# ─────────────────────────────────────────────────────────────────────────────
+# ⑤ 후속 질문 (R-04 · CN-128) — 네트워크 0 · 결정적
+#
+# 섹션 ① 에 얹지 않는다. ① 은 "옛 색인 스크립트와 값이 같은가" 로 뜻이 확정돼 있어
+# 성격이 다른 검사를 넣으면 섹션 이름이 거짓이 된다.
+#
+# 전수 입력은 `docs/*.md` 를 `service.chunk_text` 로 다시 잘라 만든다 — ① 의
+# `verify_port()` 가 이미 쓰는 방식이라 새 기법이 아니고 `.env` 도 필요 없다.
+# ─────────────────────────────────────────────────────────────────────────────
+def _corpus_sources() -> list[dict]:
+    """말뭉치 전체를 `to_source()` 모양의 청크 리스트로 만든다."""
+    out: list[dict] = []
+    for path in sorted((ROOT / "docs").glob("*.md")):
+        for index, chunk in enumerate(service.chunk_text(path.read_text(encoding="utf-8"))):
+            out.append({
+                "score": 0.0, "source_doc": path.name, "chunk_index": index, "text": chunk,
+            })
+    return out
 
-    try:
-        verify_port()
-        verify_disclaimer()
-        verify_runtime()
-        verify_store_failure()
-        verify_admin()
-    finally:
-        cleanup()
 
+def verify_followups() -> None:
+    corpus = _corpus_sources()
+
+    # ── 전수 안전 — 말뭉치가 만들 수 있는 모든 후보를 한 번에 본다 ─────────────
+    every: set[str] = set()
+    for source in corpus:
+        for _tier, _order, text in service.followup_candidates(source):
+            every.add(text)
+    check("⑤ 말뭉치가 후보를 만든다", "followup_candidates", True, len(every) > 0,
+          extra=f" (고유 {len(every)}개)")
+    check("⑤ 후보가 전부 물음표로 끝난다", "followup_candidates", [],
+          sorted(t for t in every if not t.endswith("?")))
+    check("⑤ 후보에 금칙어가 없다", "followup_banned_hit", [],
+          sorted(t for t in every if service.followup_banned_hit(t)))
+    check("⑤ 후보에 6자리 종목코드가 없다", "followup_candidates", [],
+          sorted(t for t in every if re.search(r"(?<!\d)\d{6}(?!\d)", t)))
+    check("⑤ 후보에 숫자% 약속이 없다", "followup_candidates", [],
+          sorted(t for t in every if re.search(r"\d\s*%", t)))
+    check("⑤ 후보가 길이 상한을 지킨다", "FOLLOWUP_MAX_CHARS", [],
+          sorted(t for t in every if len(t) > service.FOLLOWUP_MAX_CHARS))
+    # 화면이 escapeHtml 을 걸지만, 서버가 애초에 내보내지 않는 것이 이중 방어의 안쪽이다.
+    check("⑤ 후보에 HTML 특수문자가 없다", "followup_candidates", [],
+          sorted(t for t in every if any(ch in t for ch in '<>&"')))
+
+    # ── 절단 조각 — 청크 경계가 낱말 중간을 자른 것이 버튼이 되면 안 된다 ──────
+    #
+    # `docs/06.md` 청크 2의 첫 줄은 `가도 버틸 수 있나요?` 인데 원문은
+    # `가격이 많이 내려가도 버틸 수 있나요?` 이고 1200자 경계가 `내려|가도` 를 쪼갠 것이다.
+    # **뒤가 온전해 물음표로 멀쩡히 끝나므로 다른 어떤 검사에도 안 걸린다** —
+    # 그래서 여기서 따로 못박는다. 꼬리 절단은 `?` 로 안 끝나 자동으로 걸러진다.
+    머리절단 = [
+        text
+        for source in corpus
+        if int(source["chunk_index"]) > 0
+        for _tier, order, text in service.followup_candidates(source)
+        if order == 0
+    ]
+    check("⑤ 첫 청크가 아니면 첫 줄을 후보로 쓰지 않는다", "followup_candidates", [], 머리절단)
+    check("⑤ 알려진 절단 조각이 되살아나지 않는다", "followup_candidates", False,
+          "가도 버틸 수 있나요?" in every)
+
+    # 전수 후보 수를 여기서 센다 — 코드 주석에 손으로 적지 않기 위해서다(CN-121 · CN-126).
+    # 말뭉치나 규칙이 바뀌면 이 값이 움직이고, 그때 CN-128 의 숫자를 함께 고치면 된다.
+    check("⑤ 전수 후보 수가 기록과 같다", "followup_candidates 고유", 349, len(every))
+
+    # ── R-07 정본 목록 대조 — 손으로 베끼지 않는다 ────────────────────────────
+    #
+    # `verify_r07_expressions.py` 의 두 리스트를 `ast` 로 떼어 `followup_banned_hit()`
+    # 에 **직접** 먹인다. `build_followups` 를 통해 시험하면 길이·한글 하한이 먼저 걸려
+    # 금칙어 목록이 비어도 초록으로 뜬다 — 공허한 검사가 된다.
+    r07_source = (ROOT / "scripts" / "verify_r07_expressions.py").read_text(encoding="utf-8")
+    r07_lists: dict[str, list[str]] = {}
+    for node in ast.walk(ast.parse(r07_source)):
+        if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name):
+            name = node.targets[0].id
+            if name in ("BANNED_PRODUCTS", "BANNED_BRANDS"):
+                r07_lists[name] = list(ast.literal_eval(node.value))
+    for name in ("BANNED_PRODUCTS", "BANNED_BRANDS"):
+        words = r07_lists.get(name, [])
+        check(f"⑤ {name} 을 전부 잡는다", "followup_banned_hit", [],
+              [w for w in words if not service.followup_banned_hit(w)],
+              extra=f" ({len(words)}개 대조)")
+
+    # ── 경계 ─────────────────────────────────────────────────────────────────
+    check("⑤ sources 0건이면 빈 목록", "build_followups", [],
+          service.build_followups("분산투자", []))
+    check("⑤ limit 0 이면 빈 목록", "build_followups", [],
+          service.build_followups("분산투자", corpus, limit=0))
+    check("⑤ text 가 없으면 빈 목록", "build_followups", [],
+          service.build_followups("분산투자", [{"score": 1.0, "source_doc": "a.md",
+                                            "chunk_index": 0, "text": ""}]))
+    # 한 글자 질의는 어간을 못 만든다. 관문이 통째로 열려 아무거나 나오면 안 된다.
+    check("⑤ 어간 없는 질의는 빈 목록", "build_followups", [],
+          service.build_followups("요", corpus))
+    check("⑤ limit 1 이면 1개 이하", "build_followups", True,
+          len(service.build_followups("거래량", corpus, limit=1)) <= 1)
+
+    # 후속 질문은 **부가물**이다. 못 만드는 것은 빈 목록으로 끝나야 하고, 답변까지
+    # 500 으로 끌고 내려갈 일이 아니다. 망가진 행을 먹여도 예외가 없어야 한다 —
+    # `float("x")` 가 ValueError 를 던지는 것을 실제로 겪어서 넣은 검사다.
+    깨진행들 = (
+        {"score": "x", "source_doc": "a.md", "chunk_index": 0, "text": "## 배당의 중요한 날짜\n본문"},
+        {"score": 1.0, "source_doc": "a.md", "chunk_index": "zz", "text": "## 배당의 중요한 날짜\n본문"},
+        {"score": {}, "source_doc": None, "chunk_index": None, "text": "## 배당의 중요한 날짜\n본문"},
+        {},
+        {"score": 1.0, "source_doc": "a.md", "chunk_index": 0, "text": None},
+    )
+    던진것 = []
+    for row in 깨진행들:
+        try:
+            service.build_followups("배당의 날짜는", [row])
+        except Exception as exc:  # noqa: BLE001 — 예외가 나오면 그것이 실패다
+            던진것.append(f"{row.get('score')!r}/{row.get('chunk_index')!r}: {type(exc).__name__}")
+    check("⑤ 깨진 행에도 예외를 던지지 않는다", "build_followups", [], 던진것,
+          extra=f" ({len(깨진행들)}종 대조)")
+    check("⑤ 상한을 넘지 않는다", "FOLLOWUP_MAX", True,
+          all(len(service.build_followups(q, corpus)) <= service.FOLLOWUP_MAX
+              for q in ("거래량", "공시", "재무제표", "차트", "배당")))
+
+    # ── 관문 — 출력은 정의상 질의와 어간을 공유한다 ───────────────────────────
+    질의들 = ("거래량은 왜 보나요?", "공시는 어디서 확인하나요?", "차트는 어떻게 읽나요?",
+             "재무제표를 보는 순서", "배당은 언제 받나요?", "환율이 주가에 주는 영향")
+    무관 = []
+    for q in 질의들:
+        stems = service._followup_stems(q)
+        for text in service.build_followups(q, corpus):
+            if not (stems & service._followup_stems(text)):
+                무관.append((q, text))
+    check("⑤ 출력이 전부 질의와 어간을 공유한다", "build_followups 관문", [], 무관)
+
+    # ── 결정성 ───────────────────────────────────────────────────────────────
+    check("⑤ 같은 입력에 같은 출력", "build_followups", True,
+          service.build_followups("거래량", corpus) == service.build_followups("거래량", corpus))
+    # 라우터가 준 순서에 의존하면 안 된다 — 함수가 안에서 다시 정렬한다.
+    check("⑤ 입력 순서를 뒤집어도 같다", "build_followups",
+          service.build_followups("거래량", corpus),
+          service.build_followups("거래량", list(reversed(corpus))))
+
+    # ── 골든 거부 — 조사·심사가 원문에서 찾아낸 실제 위험 사례 ────────────────
+    #
+    # 목록을 여기에 못박는다. 하나라도 통과하게 되면 FAIL 이다. 옛 커밋에서 뽑지
+    # 않는 이유는 `verify_r07_expressions.py:11` 과 같다 — 되살아나는 것을 잡으려면
+    # 기대값이 코드에 남아 있어야 한다.
+    거부해야 = (
+        'LEAN은 "삼성전자를 오늘 사야 하나요?',
+        "삼성전자에 대입해 보기",
+        "「삼성전자에 대입해 보기」 — 문서는 이 부분을 어떻게 설명하나요?",
+        "추격매수는 무엇일까요?",
+        "지금 바로 사지 않아도 되는 이유와, 사야 하는 이유를 각각 한 문장으로 적을 수 있나요?",
+        "산타 랠리: 연말에 오른다는 말은 무엇일까요?",
+        "1년 중 언제 투자하면 좋을까요?",
+        "각 팀별로 모의 투자 시스템을 구축하여 매매 연습 합니다.",
+        "com/store/apps/details?",
+        "「내 경우에는 무엇을 확인해 보면 될까요?」",
+        "005930은 어떤 회사인가요?",
+        "연 3~5% 수익을 기대할 수 있나요?",
+        "KODEX 200을 담아도 될까요?",
+        "지금이 좋은 시점인가요?",
+        "Docker Compose 는 어떻게 설치하나요?",
+        "왜 필요한가요?",
+        "배당",
+    )
+    check("⑤ 골든 거부 목록이 전부 막힌다", "followup_rejected", [],
+          [t for t in 거부해야 if service.followup_rejected(t) is None],
+          extra=f" ({len(거부해야)}건 대조)")
+
+    # ── 골든 통과 — 막아서는 안 되는 것 ──────────────────────────────────────
+    #
+    # 명세 4.5절이 "좋은 후속 질문" 의 모범으로 든 두 문장(`docs/07.md:181`)과,
+    # 화면 예시(`ragChat.js:3`) 중 규칙에 걸릴 소지가 있던 것들이다. 필터를 조이다가
+    # 이쪽이 죽는 것이 실제로 일어났으므로(FOLLOWUP_MIN_TOKENS 4→3) 함께 못박는다.
+    통과해야 = (
+        "빨간 신호는 무엇을 뜻하나요?",
+        "보수적 흐름은 손실 확정인가요?",
+        "이동평균선은 왜 볼까요?",
+        "양봉과 음봉은 무엇일까요?",
+        "지정가 주문과 시장가 주문의 차이는?",
+        "「현금흐름표의 세 영역」 — 문서는 이 부분을 어떻게 설명하나요?",
+    )
+    check("⑤ 골든 통과 목록이 전부 살아 있다", "followup_rejected", [],
+          [(t, service.followup_rejected(t)) for t in 통과해야
+           if service.followup_rejected(t) is not None],
+          extra=f" ({len(통과해야)}건 대조)")
+
+    # ── 템플릿 자체가 안전한가 ───────────────────────────────────────────────
+    #
+    # 이 모듈이 저작하는 문장은 `FOLLOWUP_TEMPLATE` 하나다. 그 하나가 R-07 을 어기면
+    # 모든 tier2 출력이 함께 어긴다. 개인화 요청문("내 경우에는…")을 쓰지 않기로 한
+    # 결정(CN-128)이 코드에 남아 있는지 본다.
+    shaped = service.FOLLOWUP_TEMPLATE.format(heading="배당의 중요한 날짜")
+    check("⑤ 템플릿 산출물이 규칙을 통과한다", "FOLLOWUP_TEMPLATE", None,
+          service.followup_rejected(shaped))
+    check("⑤ 템플릿에 1인칭 개인화가 없다", "FOLLOWUP_TEMPLATE", [],
+          [w for w in ("내 경우", "제 경우", "제가", "내가", "저는")
+           if w in service.FOLLOWUP_TEMPLATE])
+    check("⑤ 템플릿에 금칙어가 없다", "FOLLOWUP_TEMPLATE", [],
+          service.followup_banned_hit(service.FOLLOWUP_TEMPLATE))
+    # 긴 제목은 템플릿을 씌우면 상한을 넘는다. 그 가드가 실제로 도는지 —
+    # 넘치는 제목이 tier2 후보가 되지 않아야 한다. 위 "길이 상한" 검사는 말뭉치가
+    # 마침 짧아서 통과할 수도 있으므로, 넘치는 입력을 직접 만들어 확인한다.
+    긴제목 = "가" * service.FOLLOWUP_MAX_CHARS
+    check("⑤ 템플릿이 상한을 넘기면 후보에서 빠진다", "followup_candidates", [],
+          [t for _tier, _order, t in service.followup_candidates(
+              {"score": 0.0, "source_doc": "x.md", "chunk_index": 0,
+               "text": f"## {긴제목}\n뒤에 본문이 있어야 절단 제목이 아니다."})
+           if len(t) > service.FOLLOWUP_MAX_CHARS])
+
+
+def report() -> int:
+    """모아 둔 결과를 표로 찍고 종료 코드를 돌려준다."""
     width = max(len(name) for name, *_ in results)
     print()
     for name, endpoint, expected, got, ok in results:
@@ -528,6 +773,35 @@ def main() -> int:
     passed = sum(1 for *_, ok in results if ok)
     print(f"\n{passed} / {len(results)} 통과")
     return 0 if passed == len(results) else 1
+
+
+def main() -> int:
+    # ⑤ 는 **게이트 앞**이다. 순수 함수 검사라 `.env` 도 네트워크도 필요 없는데
+    # 게이트 뒤에 두면 자격증명이 없는 환경에서 R-07 회귀 검사가 0건 실행된다.
+    # 자격증명이 없다는 것과 후속 질문 규칙이 안전하다는 것은 아무 관계가 없다.
+    verify_followups()
+
+    if not supabase_client.is_configured():
+        print(
+            "[WARN] SUPABASE_URL · SUPABASE_SERVICE_ROLE_KEY 가 없어 원격 왕복(①②③④)을\n"
+            f"       건너뜁니다. 저장소 루트의 .env 에 두 값을 넣으면 전부 돕니다 ({ROOT / '.env'})."
+        )
+        # 종료 코드로 두 상태를 가른다. 한 코드로 뭉치면 "⑤ 가 깨졌다" 와 "자격증명이
+        # 없다" 가 구별되지 않아, ⑤ 를 게이트 앞으로 옮긴 이유가 사라진다.
+        #   1 = 검사 실패 (⑤ 가 깨졌다)
+        #   2 = 자격증명이 없어 ①②③④ 를 못 돌렸다 (⑤ 는 전부 통과)
+        return report() or 2
+
+    try:
+        verify_port()
+        verify_disclaimer()
+        verify_runtime()
+        verify_store_failure()
+        verify_admin()
+    finally:
+        cleanup()
+
+    return report()
 
 
 if __name__ == "__main__":
