@@ -1,4 +1,4 @@
-# investment-portfolio-site
+﻿# investment-dashboard
 
 **포트폴리오 분석·추천·시뮬레이션 웹앱** — 개인 프로젝트입니다.
 

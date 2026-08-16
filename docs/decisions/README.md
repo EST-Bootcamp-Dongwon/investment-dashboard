@@ -1,4 +1,4 @@
-# dashboard — ADR 인덱스 (ADR-DB)
+﻿# investment-dashboard — ADR 인덱스 (ADR-DB)
 
 파일명은 `NNNN-title.md`, 문서 내 참조 키는 `ADR-DB-NNNN`.
 전역 결정은 `../../../quant-contract/docs/decisions/` (ADR-CT-*)에 있다.

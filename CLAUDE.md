@@ -1,6 +1,6 @@
 @AGENTS.md
 
-# CLAUDE.md — dashboard
+# CLAUDE.md — investment-dashboard
 
 > Claude Code는 `AGENTS.md`를 직접 읽지 않는다. 위 임포트 한 줄이 그 역할을 한다.
 > (02 검증본 P0-1) `CLAUDE.local.md`는 deprecated이므로 쓰지 않는다.

@@ -1,4 +1,4 @@
-# dashboard — 모듈 README 초안
+﻿# investment-dashboard — 모듈 README 초안
 
 > ⚠️ 이 파일은 **초안**이다. 레포 루트의 `README.md`는 아직
 > `investment-portfolio-site` 시절 내용이라 덮어쓰지 않았다.

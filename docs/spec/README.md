@@ -1,4 +1,4 @@
-# investment-portfolio-site 명세서
+﻿# investment-dashboard 명세서
 
 > 이 폴더는 **커밋·공개되는 프로젝트 명세서**입니다.
 > 개인 메모·Obsidian Vault 미러본이 아니라, 그대로 심사·리뷰에 제출할 수 있는 정본입니다.

@@ -1,4 +1,4 @@
-# lean-hyundai — 예측 검증 백테스트 모듈
+﻿# lean-hyundai — 예측 검증 백테스트 모듈
 
 **"2025년으로 학습한 모델이 2026년 상반기를 얼마나 맞혔고, 그대로 매매하면 돈이 됐는가"** 를
 한 번의 명령으로 검증하고 HTML 리포트까지 만듭니다.
@@ -10,7 +10,7 @@
 ## 빠른 실행
 
 ```bash
-cd /mnt/c/Users/kik32/workspace/EST-Camp-AI-Quant/projects/investment-portfolio-site
+cd /mnt/c/Users/kik32/workspace/EST-Camp-AI-Quant/projects/investment-dashboard
 docker compose -f docker-compose.hd.yaml run --rm hd-backtest
 ```
 

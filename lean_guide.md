@@ -1,4 +1,4 @@
-# LEAN 사용 가이드
+﻿# LEAN 사용 가이드
 
 QuantConnect LEAN 엔진을 이 저장소에서 쓰는 방법을 처음부터 정리한 문서입니다.
 명령과 출력은 2026-08-07 WSL2(Ubuntu 24.04) 환경에서 실제로 실행해 확인했습니다.
@@ -28,10 +28,10 @@ QuantConnect LEAN 엔진을 이 저장소에서 쓰는 방법을 처음부터 �
 > → [3-2절](#3-2-lean-을-쳤는데-elan-오류가-난다면)** 로 바로 가세요.
 
 이 문서에서 `<저장소>` 는 이 저장소의 루트를 뜻합니다.
-현재 경로는 `/mnt/c/Users/kik32/workspace/EST-Camp-AI-Quant/projects/investment-portfolio-site` 입니다.
+현재 경로는 `/mnt/c/Users/kik32/workspace/EST-Camp-AI-Quant/projects/investment-dashboard` 입니다.
 
 ```bash
-cd /mnt/c/Users/kik32/workspace/EST-Camp-AI-Quant/projects/investment-portfolio-site
+cd /mnt/c/Users/kik32/workspace/EST-Camp-AI-Quant/projects/investment-dashboard
 ```
 
 ---
@@ -139,7 +139,7 @@ sudo apt install python3-venv
 ### 2-1. 실행
 
 ```bash
-cd /mnt/c/Users/kik32/workspace/EST-Camp-AI-Quant/projects/investment-portfolio-site
+cd /mnt/c/Users/kik32/workspace/EST-Camp-AI-Quant/projects/investment-dashboard
 docker compose -f docker-compose.lean.yml run --rm samsung-backtest
 ```
 
@@ -640,7 +640,7 @@ explorer.exe .            # 탐색기로 폴더 열기
 
 ```bash
 # 저장소 경로를 변수에 담아둡니다 (오타 방지)
-REPO=/mnt/c/Users/kik32/workspace/EST-Camp-AI-Quant/projects/investment-portfolio-site
+REPO=/mnt/c/Users/kik32/workspace/EST-Camp-AI-Quant/projects/investment-dashboard
 
 cd ~/lean-workspace
 
@@ -856,7 +856,7 @@ ls ~/lean-workspace                    # 지우기 전에 무엇이 있는지 �
 ### 1) 남은 컨테이너 먼저 정리 (이걸 안 하면 이미지 삭제가 실패합니다)
 
 ```bash
-cd /mnt/c/Users/kik32/workspace/EST-Camp-AI-Quant/projects/investment-portfolio-site
+cd /mnt/c/Users/kik32/workspace/EST-Camp-AI-Quant/projects/investment-dashboard
 docker compose -f docker-compose.lean.yml down
 docker ps -a --filter "ancestor=samsung-lean-module:local"    # 남은 게 있는지 확인
 ```
@@ -864,7 +864,7 @@ docker ps -a --filter "ancestor=samsung-lean-module:local"    # 남은 게 있�
 ### 2) 백테스트 산출물
 
 ```bash
-cd /mnt/c/Users/kik32/workspace/EST-Camp-AI-Quant/projects/investment-portfolio-site
+cd /mnt/c/Users/kik32/workspace/EST-Camp-AI-Quant/projects/investment-dashboard
 rm -rf lean-results        # 방법 B 결과 (재실행으로 다시 만들어집니다)
 rm -rf lean-results-old    # 예전 실행 결과
 rm -rf lean-cli            # 부록 A 검증용 CLI 워크스페이스 (226MB)

@@ -1,11 +1,15 @@
-# NOTICE 추가분 — dashboard
+# NOTICE 추가분 — investment-dashboard
 
 > ⚠️ 루트 `NOTICE.md`가 이미 있어 덮어쓰지 않았다. 아래 내용을 **병합**하세요.
 
 ## 개명 이력
 
-이 저장소는 `investment-portfolio-site` 를 `dashboard` 로 개명해 승격한 것이다
-(2026-08-16). 원저작자(edumgt) 표시는 개명 후에도 유지한다.
+이 저장소는 `investment-portfolio-site` 를 `investment-dashboard` 로 개명해 승격한
+것이다 (2026-08-16). 원저작자(edumgt) 표시는 개명 후에도 유지한다.
+
+중간에 `dashboard` 를 거쳤으나 모노레포 루트의 `dashboards/` 서브모듈과 이름이 겹쳐
+`investment-dashboard` 로 다시 잡았다. GitLab 은 경로 규칙상 `est-` 접두사가 붙어
+`est-investment-dashboard` 다.
 
 ## 프론트 자산 주의
 
