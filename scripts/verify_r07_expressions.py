@@ -12,14 +12,16 @@
     ③ F23 판정     — `services/dart_outlook.assess` 를 **직접 호출**해 매수/관망이
                      사라지고 결측 규칙이 도는지. 가짜 breakdown 을 꽂는다.
     ④ F23 면책     — 서버 문구와 `components/disclaimer.js` 사본이 같은지 (`==`).
-    ⑤ main.py 연결 — 옛 투자의견 분기가 실제로 제거됐는지 소스에서 확인.
+    ⑤ 라우트 연결  — 옛 투자의견 분기가 실제로 제거됐는지 소스에서 확인.
+                     **읽는 곳은 `services/dart.py` 다** — 2026-08-16 CN-065 분해로
+                     F23 라우트 본문이 `main.py` 에서 그쪽으로 옮겨 갔다.
 
 ## 왜 ③ 만 import 하는가
 
-`main.py` 는 라우터를 다 끌고 와 무거우므로 import 하지 않는다 —
-`services/combination.py` 가 같은 이유로 AST 대조를 쓴다(CN-106). 이번에는 판정을
+F23 라우트 본문이 있는 모듈을 통째로 import 하지 않는다 —
+`services/combination.py` 가 같은 이유로 AST 대조를 쓴다(CN-106). 판정은
 `services/dart_outlook.py` 로 꺼내 뒀기 때문에 **그 모듈만 import 하면 된다.**
-`main.py` 쪽은 ⑤ 처럼 소스를 읽어 확인한다.
+나머지는 ⑤ 처럼 소스를 읽어 확인한다.
 
 ## 실행
 
@@ -204,20 +206,24 @@ def verify_f23_disclaimer() -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ⑤ main.py — 옛 분기가 남아 있지 않은가
+# ⑤ F23 라우트 본문 — 옛 분기가 남아 있지 않은가
 # ─────────────────────────────────────────────────────────────────────────────
+#
+# 2026-08-16 까지 이 섹션이 읽던 곳은 `main.py` 였다. [CN-065] 분해 순서 ⑤~⑦ 이
+# `/api/dart/financial-analysis` 의 본문을 `services/dart.py` 로 옮기면서 대상도
+# 함께 옮겼다. **읽는 파일만 바뀌었고 검사하는 내용은 그대로다.**
 
-def verify_main_source() -> None:
-    src = (ROOT / "app" / "backend" / "main.py").read_text(encoding="utf-8")
+def verify_dart_service_source() -> None:
+    src = (ROOT / "app" / "backend" / "services" / "dart.py").read_text(encoding="utf-8")
     code = re.sub(r"^\s*#.*$", "", src, flags=re.M)
 
     for token in ('"매수(Buy)"', '"중립(Hold)"', '"관망(Sell/Wait)"',
                   'outlook_eng', '"BUY"', '"SELL"', '"HOLD"'):
-        check(f"⑤ main.py 에 {token} 이 없다", "main.py", False, token in code)
+        check(f"⑤ services/dart.py 에 {token} 이 없다", "services/dart.py", False, token in code)
 
-    check("⑤ main.py 가 dart_outlook 을 쓴다", "main.py", True,
+    check("⑤ services/dart.py 가 dart_outlook 을 쓴다", "services/dart.py", True,
           "dart_outlook.assess(" in code)
-    check("⑤ breakdown 을 넘긴다", "main.py", True,
+    check("⑤ breakdown 을 넘긴다", "services/dart.py", True,
           "breakdown," in code and "_generate_dart_analysis(" in code)
 
 
@@ -324,7 +330,7 @@ def main() -> int:
     verify_f25()
     verify_f23_rule()
     verify_f23_disclaimer()
-    verify_main_source()
+    verify_dart_service_source()
     verify_strong_views()
     verify_default_views()
 

@@ -10,14 +10,17 @@ F03 포트폴리오 추천 · F04 조합 · F05 시뮬레이션 · F27 RAG 챗.
 
 ## 셋으로 나뉜다
 
-    ① main.py 경로   — 소스에서 떼어 부른다. 띄울 수 없어서다(아래)
-    ② 라우터 경로    — 빈 FastAPI 에 마운트해 실제로 200 을 받는다
+    ① /api/health   — 빈 FastAPI 에 마운트해 실제로 200 을 받는다
+    ② 라우터 경로    — 같은 방식으로 A등급 4개를 받는다
     ③ DB 가 필요한 것 — 자격증명이 있을 때만. 없으면 종료 코드 2
 
 **`main.py` 를 띄우지 않는다.** import 시점에 `torch`·`diffusers`·`matplotlib` 를
-끌어와 1.6GB 가 필요하다(`verify_simulation_api.py` 와 같은 이유). `/api/health` 는
-`main.py:173` 에 있으므로 `ast` 로 정의만 떼어 내 부른다 — `verify_dart_scoring.py`
-가 쓴 방법 그대로다. 데코레이터는 떼고, 대신 **경로 문자열을 소스에서 따로 확인**한다.
+끌어와 1.6GB 가 필요하다(`verify_simulation_api.py` 와 같은 이유). 대신 필요한
+**라우터만 골라 빈 앱에 붙인다** — 그래서 검사가 30초 안에 끝난다.
+
+2026-08-16 [CN-065](docs/spec/00-index/변경이력.md#cn-065) 분해 전까지 `/api/health` 는
+`main.py:173` 에 있어서 ① 은 `ast` 로 함수만 떼어 내 부르는 우회로였다. 라우트가
+`routers/system.py` 로 옮겨진 뒤 그 우회로를 걷고 ② 와 같은 방식으로 통일했다.
 
 ## 시세는 대역으로 바꾼다
 
@@ -39,7 +42,6 @@ Supabase 는 반대다. 5.2절이 *"우리 인프라라 예외"* 로 두었고, 
 
 from __future__ import annotations
 
-import ast
 import os
 import sys
 from pathlib import Path
@@ -69,14 +71,17 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from clients import yahoo_prices  # noqa: E402
 from routers.combination import router as combination_router  # noqa: E402
+from routers.market import router as market_router  # noqa: E402
 from routers.quant import router as quant_router  # noqa: E402
 from routers.rag import router as rag_router  # noqa: E402
 from routers.recommendation import router as recommendation_router  # noqa: E402
-from sourcetext import code_only  # noqa: E402
+from routers.system import router as system_router  # noqa: E402
 
-MAIN = ROOT / "app" / "backend" / "main.py"
-
-MOUNTED = (recommendation_router, combination_router, quant_router, rag_router)
+# `system` 과 `market` 은 CN-065 분해로 `main.py` 에서 갈라져 나온 라우터다.
+# 그전에는 `main.py` 안에 있어 마운트할 수 없었고, 그래서 ① 과 ② 일부가 소스를
+# 읽는 우회로를 썼다(각 섹션 주석 참고).
+MOUNTED = (recommendation_router, combination_router, quant_router, rag_router,
+           system_router, market_router)
 
 app = FastAPI()
 for router in MOUNTED:
@@ -127,53 +132,33 @@ yahoo_prices.download_closes = fake_download
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ① main.py 의 /api/health — 떼어 내 부른다
+# ① /api/health — 실제로 마운트해 200 을 받는다
 # ─────────────────────────────────────────────────────────────────────────────
+#
+# **2026-08-16 에 이 섹션이 승격됐다.** 그전까지는 `/api/health` 가 `main.py:173` 에
+# 있었고, `main.py` 는 import 하면 `torch`·`diffusers` 를 끌어와 1.6GB 가 필요했다.
+# 그래서 `ast` 로 함수 정의만 떼어 내 빈 전역에서 부르고, 경로·메서드는 데코레이터
+# 소스에서 따로 읽어 대조하는 우회로를 썼다.
+#
+# [CN-065](docs/spec/00-index/변경이력.md#cn-065) 분해 순서 ⑤~⑦ 이 이 라우트를
+# `routers/system.py` 로 옮기면서 **그 우회로가 필요 없어졌다.** 이제 ② 와 똑같이
+# 라우터를 빈 FastAPI 에 붙여 실제 요청을 보낸다. 떼어 내 부르던 때보다 검사가
+# 강하다 — 경로·메서드·응답을 따로 대조하지 않고 **한 번의 왕복으로 전부 확인**한다.
 
 HEALTH_PATH = "/api/health"
 
 
 def verify_health() -> None:
-    tree = ast.parse(MAIN.read_text(encoding="utf-8"))
-
-    picked = [
-        node for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == "health_check"
-    ]
-    check("① main.py 에 health_check 가 있다", "main.py:173", 1, len(picked))
-    if not picked:
+    response = client.get(HEALTH_PATH)
+    check("① GET /api/health 가 200", "TestClient", 200, response.status_code,
+          "" if response.status_code == 200 else f"  {response.text[:120]}")
+    if response.status_code != 200:
         return
 
-    # 경로 문자열은 데코레이터에 있다. 함수만 부르면 경로가 바뀐 것을 못 잡으므로
-    # 소스에서 따로 읽어 대조한다.
-    paths = [
-        arg.value
-        for node in picked for deco in node.decorator_list
-        if isinstance(deco, ast.Call)
-        for arg in deco.args
-        if isinstance(arg, ast.Constant) and isinstance(arg.value, str)
-    ]
-    check("① 경로가 /api/health", "main.py", [HEALTH_PATH], paths)
+    check("① /api/health 응답", "TestClient", {"status": "ok"}, response.json())
 
-    methods = [
-        deco.func.attr
-        for node in picked for deco in node.decorator_list
-        if isinstance(deco, ast.Call) and isinstance(deco.func, ast.Attribute)
-    ]
-    check("① GET 으로 선언됐다", "main.py", ["get"], methods)
-
-    # 데코레이터를 떼고 함수만 실행한다. `app` 이 없으므로 붙인 채로는 죽는다.
-    bare = ast.FunctionDef(
-        name=picked[0].name, args=picked[0].args, body=picked[0].body,
-        decorator_list=[], returns=picked[0].returns, type_comment=None,
-        type_params=[],
-    )
-    module = ast.fix_missing_locations(ast.Module(body=[bare], type_ignores=[]))
-    namespace: dict[str, object] = {}
-    exec(compile(module, str(MAIN), "exec"), namespace)
-
-    check("① health_check() 응답", "main.py",
-          {"status": "ok"}, namespace["health_check"]())  # type: ignore[operator]
+    # POST 로는 열리지 않아야 한다. GET 으로 선언됐는지를 왕복으로 확인하는 방법이다.
+    check("① POST 는 405", "TestClient", 405, client.post(HEALTH_PATH).status_code)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -235,11 +220,11 @@ def verify_declared_routes() -> None:
     }
     check("② A등급 라우터 경로 11개가 선언돼 있다", "routers/", [], sorted(expected - mounted))
 
-    # 대장이 F04 로 적어 둔 것은 `main.py` 의 옛 경로다. 그쪽은 마운트할 수 없어
-    # 선언만 확인한다. 사라지면 화면(`api.js:57`)이 404 를 받는다.
-    source = code_only(MAIN)
-    check("② main.py 의 F04 옛 경로가 살아 있다", "main.py", True,
-          '"/api/market/portfolio-combination"' in source)
+    # 대장이 F04 로 적어 둔 옛 경로. 2026-08-16 까지는 `main.py` 에 있어 마운트할 수
+    # 없었고 소스 문자열로만 확인했는데, CN-065 분해가 `routers/market.py` 로 옮겨
+    # **실제 마운트로 확인**할 수 있게 됐다. 사라지면 화면(`api.js:57`)이 404 를 받는다.
+    check("② F04 옛 경로가 살아 있다", "routers/market.py", True,
+          ("POST", "/api/market/portfolio-combination") in mounted)
 
     # CN-028 이 삭제를 확정한 경로. 되살아나면 결정이 뒤집힌 것이다.
     check("② 삭제 확정된 /api/rag/search 가 없다", "routers/rag.py", 404,

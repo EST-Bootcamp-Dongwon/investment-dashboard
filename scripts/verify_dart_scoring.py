@@ -4,23 +4,27 @@
 [테스트-계획 5.1절] 최소셋 7종 중 **B**. 문서가 적은 이유는
 *"순수 계산. CN-046 결측 처리 변경의 회귀 방지"* 다.
 
-## `main.py` 안의 함수를 어떻게 부르는가 — 옮기지 않고 떼어 온다
+## 두 함수를 어떻게 부르는가 — 옮기지 않고 떼어 온다
 
-두 함수는 `main.py:2341` · `:2376` 에 있고, `main.py` 는 import 하면
-`torch`·`diffusers`·`matplotlib` 를 끌고 온다(1.6GB). 앞선 세션들이 세 가지 방법을
-썼다 — 상수만 AST 로 비교(CN-106) · 힙독을 텍스트로 떼어 컴파일(CN-119) ·
-바뀌는 부분을 `services/` 로 꺼내기(CN-123).
+두 함수는 **`services/dart.py:257` · `:292`** 에 있다. 2026-08-16 까지는 `main.py`
+에 있었고([CN-065](docs/spec/00-index/변경이력.md#cn-065) 분해 순서 ⑤~⑦ 이 옮겼다),
+그때는 `main.py` 를 import 하면 `torch`·`diffusers`·`matplotlib` 가 딸려 와
+(1.6GB) 떼어 오는 것 말고 방법이 없었다.
 
-여기서는 **네 번째**를 쓴다. `ast` 로 두 함수의 정의 노드만 떼어 내 컴파일하고,
-**전역이 비어 있는 이름공간에서 실행**한다. 셋과 다른 점:
+**이제는 그 이유가 없어졌다.** `services/dart.py` 는 `urllib`·`zipfile`·`json` 만
+쓰므로 그냥 import 해도 된다. 그런데도 떼어 오는 방식을 그대로 둔 이유는 —
 
-- CN-123 처럼 코드를 옮기지 않는다. 이번엔 **바뀌는 것이 없다** — 검사를 붙이려고
-  운영 코드를 움직이면 그 움직임 자체가 회귀 위험이다.
-- CN-106 처럼 상수만 보지 않는다. **함수를 진짜로 부른다.**
-- 전역을 비워 두는 것이 그 자체로 검사다. 두 함수가 모듈 전역에 손을 뻗는 순간
-  `NameError` 로 죽는다 — "순수 계산" 이라는 전제가 깨지면 즉시 드러난다.
+- **전역을 비워 두는 것이 그 자체로 검사이기 때문이다.** 두 함수가 모듈 전역에
+  손을 뻗는 순간 `NameError` 로 죽는다. "순수 계산" 이라는 전제가 깨지면 즉시
+  드러난다. import 로 바꾸면 이 검사가 사라진다.
+- 검사 방식을 바꾸는 것과 코드를 옮기는 것을 **같은 커밋에서 하지 않기 위해서**다.
+  둘을 함께 바꾸면 검사가 실패했을 때 어느 쪽 탓인지 가려낼 수 없다.
 
-검사하는 것은 **`main.py` 안의 바로 그 바이트**다. 사본이 아니다.
+앞선 세션들이 쓴 세 방법은 그대로다 — 상수만 AST 로 비교(CN-106) · 힙독을
+텍스트로 떼어 컴파일(CN-119) · 바뀌는 부분을 `services/` 로 꺼내기(CN-123).
+이것은 **네 번째**이고, CN-106 과 달리 **함수를 진짜로 부른다.**
+
+검사하는 것은 **`services/dart.py` 안의 바로 그 바이트**다. 사본이 아니다.
 
 ## 무엇을 고정하는가
 
@@ -53,7 +57,7 @@ sys.path.insert(0, str(ROOT / "app" / "backend"))
 from services import dart_outlook  # noqa: E402
 from sourcetext import code_only  # noqa: E402
 
-MAIN = ROOT / "app" / "backend" / "main.py"
+SOURCE = ROOT / "app" / "backend" / "services" / "dart.py"
 WANTED = ("_calc_dart_ratios", "_score_financial_health")
 
 results: list[tuple[str, str, str, str, bool]] = []
@@ -72,21 +76,21 @@ def check(name: str, where: str, expected, got, extra: str = "") -> bool:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# ① 떼어 오기 — main.py 를 import 하지 않고 두 함수만 컴파일한다
+# ① 떼어 오기 — 모듈을 import 하지 않고 두 함수만 컴파일한다
 # ─────────────────────────────────────────────────────────────────────────────
 
 def extract() -> dict[str, object]:
-    """`main.py` 에서 두 함수의 정의만 떼어 내 **빈 전역**에서 실행한다."""
-    tree = ast.parse(MAIN.read_text(encoding="utf-8"))
+    """`services/dart.py` 에서 두 함수의 정의만 떼어 내 **빈 전역**에서 실행한다."""
+    tree = ast.parse(SOURCE.read_text(encoding="utf-8"))
     picked = [
         node for node in tree.body
         if isinstance(node, ast.FunctionDef) and node.name in WANTED
     ]
     module = ast.Module(body=picked, type_ignores=[])
     namespace: dict[str, object] = {}
-    # `__builtins__` 만 있고 `main.py` 의 전역은 하나도 없다. 두 함수가 바깥을
+    # `__builtins__` 만 있고 `services/dart.py` 의 전역은 하나도 없다. 두 함수가 바깥을
     # 참조하면 여기서가 아니라 **호출할 때** NameError 로 죽는다 — 섹션 ②가 부른다.
-    exec(compile(ast.fix_missing_locations(module), str(MAIN), "exec"), namespace)
+    exec(compile(ast.fix_missing_locations(module), str(SOURCE), "exec"), namespace)
     return namespace
 
 
@@ -102,10 +106,10 @@ def _fin(**amounts: tuple[float, float]) -> dict[str, dict[str, float]]:
 
 def verify_extraction() -> None:
     names = sorted(n for n in NS if not n.startswith("__"))
-    check("① 두 함수를 떼어 왔다", "main.py", sorted(WANTED), names)
-    check("① main.py 가 실제로 그 둘을 부른다", "main.py", (True, True),
-          ("_calc_dart_ratios(fin)" in code_only(MAIN),
-           "_score_financial_health(ratios)" in code_only(MAIN)))
+    check("① 두 함수를 떼어 왔다", "services/dart.py", sorted(WANTED), names)
+    check("① dart.py 가 실제로 그 둘을 부른다", "services/dart.py", (True, True),
+          ("_calc_dart_ratios(fin)" in code_only(SOURCE),
+           "_score_financial_health(ratios)" in code_only(SOURCE)))
 
 
 # ─────────────────────────────────────────────────────────────────────────────

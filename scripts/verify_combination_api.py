@@ -13,7 +13,7 @@ F05 는 시드가 고정 상수라 두 경로에 같은 입력을 넣고 **정�
 
 그래서 세 가지로 나눠 대조한다.
 
-    ① 규칙의 상수  — `main.py` **원문을 AST 로 파싱**해 임계값·문장·라벨·정규식·
+    ① 규칙의 상수  — **원본 라우트를 AST 로 파싱**해 임계값·문장·라벨·정규식·
                      하한·응답 키를 뽑아 `services/combination.py` 와 비교한다.
                      "값을 바꾸지 않았다" 는 주장이 여기서 검사 가능해진다.
     ② 규칙의 동작  — **고정 시계열**을 넣어 판정이 결정적으로 나오는지 본다.
@@ -21,22 +21,24 @@ F05 는 시드가 고정 상수라 두 경로에 같은 입력을 넣고 **정�
     ③ 왕복        — 시세 경계(`clients/yahoo_prices.download_closes`)를 가짜로
                      바꿔 **원격 왕복 자체를 결정적으로** 만든다.
 
-**③ 이 가능한 것이 이번 계층 분리가 사 준 것이다.** `main.py:1194` 처럼 라우트
-핸들러가 `yf.download` 를 직접 부르면 꽂을 자리가 없어, 원격 왕복 검증이 매번 다른
-시세 위에서 돌아 재실행할 때마다 기대값이 달라진다.
+**③ 이 가능한 것이 계층 분리가 사 준 것이다.** 라우트 핸들러가 `yf.download` 를
+직접 부르면 꽂을 자리가 없어, 원격 왕복 검증이 매번 다른 시세 위에서 돌아 재실행할
+때마다 기대값이 달라진다.
 
 검사 71건 = 원문 대조 21 + 규칙 동작 11 + preview 8 + create 8 + history 6
            + detail 10 + 감사 컬럼 3 + DB 백스톱 4.
 
-## main.py 를 띄우지 않는다 — 그런데 읽기는 한다
+## 앱을 띄우지 않는다 — 그런데 읽기는 한다
 
 `app/backend/main.py` 는 `torch`·`diffusers`·`matplotlib` 를 import 시점에 끌어와,
 이 검증만을 위해 1.6GB 를 설치해야 한다. 그래서 **라우터만 빈 FastAPI 에 마운트**한다
 (`verify_simulation_api.py` 와 같은 이유).
 
-①은 그 제약 안에서 원본과 대조하는 방법이다. **import 하지 않고 소스만 읽어
-`ast` 로 파싱**하면 `torch` 가 딸려 오지 않는다. F05 는 `routers/quant.py` 를 그냥
-import 할 수 있어 필요 없던 우회다.
+①이 읽는 원본은 `services/market.py` 의 `portfolio_combination` 이다. 2026-08-16
+[CN-065](docs/spec/00-index/변경이력.md#cn-065) 분해 전에는 `main.py:1194` 에 있어
+**import 하지 않고 소스만 읽는 것 말고 방법이 없었다.** 지금은 그 모듈이 가벼워져
+import 해도 되지만 AST 방식을 그대로 둔다 — 이 검사가 보려는 것은 함수 안에 박힌
+**상수**이고, import 하면 상수가 아니라 실행 결과를 보게 되기 때문이다.
 
 ## 실행
 
@@ -146,13 +148,17 @@ print(f"\n대상   : {host[:8]}….supabase.co  (원격)")
 print(f"소유자 : A={ANON_A[:14]}…  B={ANON_B[:14]}…")
 
 
-# ─── 1. main.py 원문 대조 — import 하지 않고 AST 로 읽는다 ───────────────────
+# ─── 1. 원본 대조 — import 하지 않고 AST 로 읽는다 ─────────────────────────
 #
 # 이 세션의 주장("판정을 옮겼고 값을 바꾸지 않았다")을 고정하는 자리다.
-# F05 는 원본을 import 해 출력을 비교했지만, F04 의 원본은 torch 를 끌고 오는
-# main.py 안에 있어 그럴 수 없다. 소스만 읽으면 그 비용이 없다.
+# F05 는 원본을 import 해 출력을 비교했지만, F04 의 원본은 오래 `main.py` 안에 있어
+# 그럴 수 없었다(torch 를 끌고 온다). 소스만 읽으면 그 비용이 없다.
+#
+# **2026-08-16 CN-065 분해로 원본이 `services/market.py` 로 옮겨 갔다.** 이제는
+# import 해도 무겁지 않지만 AST 로 읽는 방식을 그대로 둔다 — 검사가 보는 것은
+# "그 함수 안의 상수" 이고, import 하면 상수가 아니라 **실행 결과**를 보게 된다.
 
-SOURCE = (ROOT / "app" / "backend" / "main.py").read_text(encoding="utf-8")
+SOURCE = (ROOT / "app" / "backend" / "services" / "market.py").read_text(encoding="utf-8")
 TREE = ast.parse(SOURCE)
 
 ORIGIN = next(
@@ -160,7 +166,7 @@ ORIGIN = next(
     for node in ast.walk(TREE)
     if isinstance(node, ast.FunctionDef) and node.name == "portfolio_combination"
 )
-print(f"원본   : main.py:{ORIGIN.lineno}~{ORIGIN.end_lineno} "
+print(f"원본   : services/market.py:{ORIGIN.lineno}~{ORIGIN.end_lineno} "
       f"`{ORIGIN.name}` (AST · import 하지 않음)")
 
 
@@ -226,20 +232,32 @@ def named_dict(fn: ast.FunctionDef, name: str) -> dict:
             and isinstance(node.value, ast.Dict)
         ):
             return ast.literal_eval(node.value)
-    raise AssertionError(f"main.py 에서 {name} 대입을 찾지 못했습니다")
+    raise AssertionError(f"services/market.py 에서 {name} 대입을 찾지 못했습니다")
 
 
 def constant_422s(fn: ast.FunctionDef) -> list[str]:
-    """`raise HTTPException(status_code=422, detail="…")` 의 상수 문구들."""
+    """`raise DomainError(422, "…")` 의 상수 문구들.
+
+    2026-08-16 [CN-065] 분해 전에는 `raise HTTPException(status_code=422, detail="…")`
+    였고, 이 함수도 그 모양(`func.id == "HTTPException"` · 키워드 `detail`)을 읽었다.
+    서비스 계층이 HTTP 를 모르게 되면서 예외가 `services/errors.DomainError` 로
+    바뀌었고 인자도 **위치 인자 둘**이 됐다. 읽는 모양만 따라 바꾼 것이고,
+    **뽑아내는 문구는 같다** — 그래서 아래 18번 검사의 기대값은 손대지 않았다.
+
+    f-string 으로 만드는 문구(종목명이 끼어드는 것)는 상수가 아니라 여기 담기지
+    않는다. 이것도 옮기기 전과 같다.
+    """
     out: list[str] = []
     for node in ast.walk(fn):
         if not (isinstance(node, ast.Raise) and isinstance(node.exc, ast.Call)):
             continue
-        if getattr(node.exc.func, "id", "") != "HTTPException":
+        if getattr(node.exc.func, "id", "") != "DomainError":
             continue
-        for kw in node.exc.keywords:
-            if kw.arg == "detail" and isinstance(kw.value, ast.Constant):
-                out.append(kw.value.value)
+        args = node.exc.args
+        if (len(args) == 2
+                and isinstance(args[0], ast.Constant) and args[0].value == 422
+                and isinstance(args[1], ast.Constant)):
+            out.append(args[1].value)
     return out
 
 
@@ -263,7 +281,7 @@ def regex_literal(fn: ast.FunctionDef) -> str:
             and isinstance(node.args[0], ast.Constant)
         ):
             return node.args[0].value
-    raise AssertionError("main.py 에서 re.fullmatch 패턴을 찾지 못했습니다")
+    raise AssertionError("services/market.py 에서 re.fullmatch 패턴을 찾지 못했습니다")
 
 
 THRESHOLDS = literal_thresholds(ORIGIN)

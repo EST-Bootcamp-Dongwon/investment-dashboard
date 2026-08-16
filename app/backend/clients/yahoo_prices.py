@@ -32,8 +32,12 @@ AUTO_ADJUST = True
 THREADS = False
 
 
-def _close_series(frame: Any) -> Any:
+def close_series(frame: Any) -> Any:
     """일봉 프레임에서 종가 열만 뽑아 결측을 지운다. `main.py:1166~1170` 그대로다.
+
+    **밑줄을 뗀 이유** — `main.py` 의 `_extract_close_series` 가 이 함수와 글자까지
+    같았다(CN-066 이 센 중복 3종에 없던 네 번째다). 분해하면서 그쪽을 지우고 이
+    함수 하나로 합쳤으므로, 이제 `services/market.py`·`services/macro.py` 도 부른다.
 
     `hasattr(close, "columns")` 를 보는 것은 yfinance 가 티커 수에 따라 열 구조를
     바꾸기 때문이다 — 단일 티커인데도 MultiIndex 로 오는 경우가 있어 그때는 첫 열을
@@ -65,7 +69,7 @@ def download_closes(
         closes      : {"ZZZZNOSUCH": len=0} ← 빈 Series 로 온다
 
     yfinance 는 stderr 에 경고만 찍고 **빈 프레임을 돌려준다.** `Close` 열은 있으므로
-    `_close_series` 도 통과한다. 그래서 없는 티커를 걸러내는 것은 이 함수가 아니라
+    `close_series` 도 통과한다. 그래서 없는 티커를 걸러내는 것은 이 함수가 아니라
     `services/combination.MIN_HISTORY` 의 길이 검사이고, 사용자에게 나가는 문장은
     `main.py` 와 같다("…의 충분한 가격 데이터를 찾지 못했습니다"). 위 예외 분기는
     네트워크·파싱 실패용으로 남는다.
@@ -84,7 +88,7 @@ def download_closes(
                 auto_adjust=AUTO_ADJUST,
                 threads=THREADS,
             )
-            closes[ticker] = _close_series(frame)
+            closes[ticker] = close_series(frame)
         except Exception:  # noqa: BLE001 — 위 docstring 참고
             unavailable.append(ticker)
     return closes, unavailable

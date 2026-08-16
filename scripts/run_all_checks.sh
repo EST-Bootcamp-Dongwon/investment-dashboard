@@ -38,6 +38,7 @@ OFFLINE_ONLY=0
 CHECKS=(
   "E|check_forbidden_terms.py|0|off|금지 표현 (3.4절 4-1·4-2)"
   "F|check_layers.py|0 2|off|계층 규칙 (아키텍처 5절 6개 명령)"
+  "H|check_routes.py|0|off|라우트 68개 보존 (CN-065 분해 안전망)"
   "B|verify_dart_scoring.py|0|off|DART 재무 비율·점수"
   "C|verify_walkforward.py|0|off|hd_core 워크포워드"
   "A|verify_recommendation_rule.py|0|off|F03 판정 규칙 27조합"
