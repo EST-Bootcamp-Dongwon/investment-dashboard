@@ -3,7 +3,10 @@
  *
  * /api/backtest-lab/run 을 호출해 예측 정확도와 간이 매매 성과를 받아 그립니다.
  * 차트는 외부 라이브러리 없이 인라인 SVG 로 직접 그립니다(리포트 생성기와 같은 방식).
+ * → 이 SVG 는 [ADR-DB-0002](../../../docs/decisions/0002-single-chart-library-apexcharts.md)
+ *   결정 2번에 따라 나중에 ApexCharts 로 흡수합니다. 지금은 그대로 둡니다.
  */
+import { api } from '../api.js';
 
 const COLOR = {
   actual: '#0f766e',
@@ -227,26 +230,14 @@ function collect() {
   };
 }
 
-async function post(path, body) {
-  const res = await fetch(path, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const json = await res.json().catch(() => ({ detail: res.statusText }));
-  if (!res.ok) {
-    // FastAPI 검증 오류는 detail 이 배열로 옵니다.
-    const detail = Array.isArray(json.detail)
-      ? json.detail.map((d) => d.msg || JSON.stringify(d)).join(' / ')
-      : json.detail || res.statusText;
-    throw new Error(detail);
-  }
-  return json;
-}
+// 이 자리에 있던 `post()` 헬퍼는 `js/api.js` 로 회수했습니다.
+// **422 의 배열 `detail` 을 ' / ' 로 이어붙이던 처리도 함께 옮겼습니다** — 그게 없으면
+// "날짜 형식이 올바르지 않습니다(YYYY-MM-DD): …" 대신 `[object Object]` 가 뜹니다
+// (`js/api.js` 의 `toError` 주석 ①).
 
 async function loadConfig() {
   try {
-    const cfg = await fetch('/api/backtest-lab/config').then((r) => r.json());
+    const cfg = await api.backtestLabConfig();
     const select = $('preset');
     for (const p of cfg.presets || []) {
       const option = document.createElement('option');
@@ -266,7 +257,14 @@ async function loadConfig() {
       $('run-btn').disabled = true;
     }
   } catch (err) {
+    // **회수하면서 반드시 채워야 했던 자리입니다.** 옛 코드는 `res.ok` 를 안 봐서
+    // 404·500 응답도 본문을 그대로 `cfg` 로 받았고, `cfg.available` 이 undefined 라
+    // 아래 세 줄이 우연히 돌아 실행 버튼이 막혔습니다. `apiFetch` 는 던지므로 그 우연이
+    // 사라집니다 — 명시적으로 되살리지 않으면 **버튼이 살아 있는 채로 안내가 없습니다.**
     console.error('설정 로드 실패:', err);
+    statusEl().textContent = `설정을 불러오지 못했습니다: ${err.message}`;
+    statusEl().className = 'lab-status error';
+    $('run-btn').disabled = true;
   }
 }
 
@@ -287,7 +285,7 @@ function bind() {
     statusEl().textContent = '시세를 받고 모델을 학습하는 중… (10초 정도 걸립니다)';
 
     try {
-      const data = await post('/api/backtest-lab/run', collect());
+      const data = await api.backtestLabRun(collect());
       lastPayload = collect();
       const box = $('lab-result');
       box.innerHTML = renderResult(data);
@@ -310,7 +308,7 @@ function bind() {
     statusEl().className = 'lab-status';
     statusEl().textContent = '리포트를 만드는 중…';
     try {
-      const result = await post('/api/backtest-lab/report', lastPayload || collect());
+      const result = await api.backtestLabReport(lastPayload || collect());
       // 자체완결 HTML 이라 Blob 으로 바로 내려받게 합니다.
       const blob = new Blob([result.html], { type: 'text/html;charset=utf-8' });
       const url = URL.createObjectURL(blob);

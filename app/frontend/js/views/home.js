@@ -1,3 +1,5 @@
+import { api } from '../api.js';
+
 const HOME_MARKETS = [
   { id: 'kospi', name: 'KOSPI', ticker: '^KS11', color: '#0078d4' },
   { id: 'kosdaq', name: 'KOSDAQ', ticker: '^KQ11', color: '#8b5cf6' },
@@ -127,9 +129,7 @@ export function homeView(container) {
     destroyChart(id);
 
     try {
-      const response = await fetch(`/api/home/market-candle?market=${encodeURIComponent(id)}&period=${periods.get(id)}`);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
+      const data = await api.homeMarketCandle(id, periods.get(id));
       const ohlcv = data.ohlcv || [];
       if (!ohlcv.length) throw new Error('데이터 없음');
 
@@ -201,14 +201,10 @@ export function homeView(container) {
 
     try {
       const tickers = [...US_MEGA_CAPS, ...KOREAN_BLUE_CHIPS].map((item) => item.ticker);
-      const response = await fetch('/api/market/snapshot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tickers }),
-        signal: quoteAbortController.signal,
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const data = await response.json();
+      // `signal` 을 2번째 인자로 넘긴다. 새로고침을 연타하면 이전 요청을 끊어야
+      // 늦게 도착한 응답이 최신 화면을 덮어쓰지 않는다(아래 catch 의 AbortError 분기와
+      // `window._viewCleanup` 이 이것에 의존한다).
+      const data = await api.marketSnapshot({ tickers }, { signal: quoteAbortController.signal });
       const quoteByTicker = new Map((data.items || []).map((item) => [item.ticker, item]));
 
       [['us', US_MEGA_CAPS], ['kr', KOREAN_BLUE_CHIPS]].forEach(([region, stocks]) => {

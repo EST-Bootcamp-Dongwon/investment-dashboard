@@ -6,7 +6,13 @@
  * 외부 youtube.com으로 이동시키지 않고, 이 페이지의 콘텐츠 영역 안에서
  * YouTube IFrame Player API로 재생 + 상태 이벤트(재생/일시정지/종료)를 추적한다.
  */
+import { fetchAsset } from '../api.js';
+
 const HISTORY_KEY = 'yt_watch_history_v1';
+// 백엔드 API 가 아니라 **프론트와 같은 출처의 정적 JSON** 이다. 문서(`/pages/youtube.html`)
+// 기준 상대경로라 실제 요청은 `/js/data/youtubeVideos.json` 이 된다.
+// 그래서 `apiFetch` 가 아니라 `fetchAsset` 이다 — `apiFetch` 는 `<meta name="api-base">`
+// 값을 문자열로 앞에 붙이므로, 팀 통합 때 `https://팀원백엔드../js/data/…` 가 된다.
 const DATA_URL = '../js/data/youtubeVideos.json';
 const VIDEO_MODULES = [
   { title: '주식 1', subtitle: '경제와 산업을 살펴봐요', topics: ['산업·경쟁력 분석'] },
@@ -233,9 +239,7 @@ async function render() {
 
   let data;
   try {
-    const res = await fetch(DATA_URL);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    data = await res.json();
+    data = await fetchAsset(DATA_URL);
   } catch (err) {
     el.innerHTML = `<div class="card"><p style="color:var(--red)">영상 목록을 불러오지 못했습니다: ${err.message}</p></div>`;
     return;

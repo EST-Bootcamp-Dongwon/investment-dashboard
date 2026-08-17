@@ -1,4 +1,4 @@
-import { apiFetch } from '../api.js';
+import { api, apiFetch } from '../api.js';
 import { loadViewPayload, saveViewPayload } from '../utils/localState.js';
 
 // ── helpers ────────────────────────────────────────────────────────────────
@@ -498,8 +498,14 @@ export function taxAccountingView(container) {
     const fd = new FormData();
     fd.append('file', file);
     try {
-      const data = await fetch('/api/tax/upload', { method: 'POST', body: fd }).then(r => r.json());
-      if (data.detail) throw new Error(data.detail);
+      // `apiFetch` 는 body 가 FormData 면 `Content-Type` 을 **넣지 않는다**(api.js `buildInit`).
+      // 브라우저가 multipart boundary 를 직접 붙여야 `file: UploadFile = File(...)` 이
+      // 본문을 읽는다. 옛 코드가 `fetch` 를 직접 부른 덕에 우연히 지켜지던 조건이다.
+      //
+      // `if (data.detail) throw` 를 뺀 이유: `apiFetch` 가 비-2xx 에서 이미 던지고,
+      // 그때 메시지가 서버 `detail` 문자열 그대로다(계약 §8.4). 2xx 응답에 `detail` 이
+      // 실려 오는 경로는 백엔드에 없다.
+      const data = await api.taxUpload(fd);
       _transactions = data.transactions;
       _simResult = null;
       persistTaxState();

@@ -1,17 +1,75 @@
+# 빌드 컨텍스트에서 제외할 것.
+#
+# ## 왜 손대는가 — `lean-cli/` 225MB 가 매 빌드마다 데몬으로 전송되고 있었다
+#
+# `.dockerignore` 자체는 이미 있었다(05 검증본 §5.5 의 "신설" 은 실물과 다르다).
+# 빠져 있던 것은 **큰 것들**이다. 실측(2026-08-16, `du -sh`):
+#
+#     .venv                504M   ← 이미 제외돼 있었다
+#     lean-cli             225M   ← 제외 안 됨. LEAN CLI 워크스페이스(data/ 만 226MB)
+#     app                   11M
+#     docs                 2.2M
+#     image                880K
+#     lean-hyundai-results 448K
+#     lean-results(-old)   520K
+#     test                 236K
+#
+# ## 지우면 안 되는 것이 있다 ★
+#
+# 05 검증본 §5.5 는 제외 목록에 **`lean-*/` 와 `docs/`** 를 적었다. **그대로 하면
+# 빌드가 깨진다.** Dockerfile 이 둘 다 COPY 하기 때문이다.
+#
+#     Dockerfile:22  COPY lean-hyundai/hd_core.py … ./lean-hyundai/
+#     Dockerfile:23  COPY docs/ ./docs/
+#
+# `lean-hyundai/`(132K)와 `docs/`(2.2MB)는 **남긴다.** 제외하는 것은 이름이 비슷한
+# 산출물 폴더들(`lean-cli` · `lean-*-results` · `lean-samsung`)이다.
+
+# ── 버전관리·에디터 ────────────────────────────────────────
 .git
+.gitignore
+.gitattributes
 .github
+.claude
+
+# ── 파이썬 가상환경·캐시 ───────────────────────────────────
 .venv
 venv
 __pycache__/
 *.py[cod]
-*.log
+.pytest_cache/
+.ruff_cache/
+coverage/
+
+# ── 시크릿 (Public 저장소다. 이미지에도 넣지 않는다) ───────
 .env
+*.env
+!.env.example
 app/backend/.env
-app/backend/__pycache__/
-app/generated/
-node_modules/
-.DS_Store
 *.key
 *.pem
-coverage/
-.pytest_cache/
+
+# ── 실행 산출물 ────────────────────────────────────────────
+*.log
+app/generated/
+# Dockerfile:18~20 이 빌드 중에 CDN 에서 받아 만든다. 호스트 사본을 보내지 않는다.
+app/frontend/vendor/
+
+# ── LEAN 워크스페이스·백테스트 산출물 ★ 가장 큰 절감 ───────
+# `lean-hyundai/` 는 Dockerfile:22 가 3파일을 COPY 하므로 여기 없다.
+lean-cli/
+lean-results/
+lean-results-old/
+lean-hyundai-results/
+lean-samsung/
+
+# ── 런타임에 안 쓰는 것 ────────────────────────────────────
+image/
+reports/
+test/
+supabase/
+bi/
+data/
+node_modules/
+.DS_Store
+Thumbs.db

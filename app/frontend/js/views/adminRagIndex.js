@@ -26,6 +26,8 @@
 
 const TOKEN_KEY = 'adminAccessToken';
 
+import { api } from '../api.js';
+
 const STATE_BADGE = {
   indexed: { className: 'badge badge-green', label: '색인됨' },
   missing: { className: 'badge badge-yellow', label: '색인 없음' },
@@ -50,18 +52,25 @@ export function adminRagIndexView(app) {
 
   async function callAdmin(path, options = {}) {
     if (!token) throw new Error('액세스 토큰을 먼저 입력하세요.');
-    const response = await fetch(`/api/admin/rag${path}`, {
-      ...options,
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
+    // `Authorization` 만 넘긴다. `Content-Type: application/json` 은 `apiFetch` 가
+    // **병합해서** 채운다 — 옛 `apiFetch` 는 `{ headers: {…}, ...options }` 라
+    // 호출자 헤더가 기본 헤더를 통째로 덮었고, 그대로 옮겼으면 `POST /reindex` 의
+    // 본문이 `text/plain` 으로 나가 422 가 됐다 (api.js `buildInit` 주석 ①).
+    try {
+      return await api.adminRag(path, { ...options, headers: { Authorization: `Bearer ${token}` } });
+    } catch (error) {
       // 401·403·503 을 서버가 이미 갈라 준다(routers/owner.require_admin).
       // 문구를 여기서 다시 짓지 않고 그대로 보여 준다 — 로그인하면 되는 상황과
       // 로그인해도 안 되는 상황을 사용자가 구분할 수 있어야 한다.
-      throw new Error(data.detail || `요청이 실패했습니다 (HTTP ${response.status}).`);
+      //
+      // 서버가 `detail` 을 안 준 응답(예: 관리자 라우터의 500 + 비-JSON 본문)에서만
+      // 이 화면이 쓰던 한국어 폴백으로 되돌린다. `apiFetch` 의 기본 폴백은
+      // `statusText` 인데 HTTP/2 에서는 그게 빈 문자열이다.
+      if (error.status && !error.detail) {
+        throw new Error(`요청이 실패했습니다 (HTTP ${error.status}).`);
+      }
+      throw error;
     }
-    return data;
   }
 
   async function load() {

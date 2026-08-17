@@ -37,7 +37,16 @@ lean-cli/
 # 앞의 `/` 는 저장소 루트만 가리킨다. 이게 없으면 app/frontend/js/data/ 처럼
 # 코드가 쓰는 하위 폴더까지 함께 제외된다.
 /DATA-ROOT/
-/data/
+/data/*
+# `data/exports/` 만 예외다 — 폴더 자체는 추적하고 **내용물은 계속 무시**한다.
+# `/data/` 로 폴더째 무시하면 `.gitkeep` 까지 걸려(`git check-ignore` 실측 2026-08-16)
+# 클론한 사람에게 폴더가 없고, 익스포트가 첫 실행에서 실패한다.
+# git 은 제외된 디렉터리 안으로 내려가지 않으므로 `/data/*` → `!폴더` → `폴더/*` →
+# `!.gitkeep` 4줄이 전부 필요하다. `!/data/exports/.gitkeep` 한 줄만으로는 안 된다.
+# (익스포트 산출물은 `api-contract.md` §5 대로 CSV·parquet 이고 아래 확장자 규칙에도 걸린다)
+!/data/exports/
+/data/exports/*
+!/data/exports/.gitkeep
 *.csv
 *.xlsx
 *.zip

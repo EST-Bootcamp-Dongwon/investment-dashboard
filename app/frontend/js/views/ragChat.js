@@ -1,3 +1,4 @@
+import { api } from '../api.js';
 import { disclaimer, DISCLAIMER_CONTEXT } from '../components/disclaimer.js';
 
 const EXAMPLES = ['PER과 PBR의 차이를 알려줘', 'ETF 괴리율은 왜 생기나요?', '지정가 주문과 시장가 주문의 차이는?', '분산투자의 목적은 무엇인가요?'];
@@ -15,8 +16,6 @@ export function ragChatView(app) {
   let sources = [];
   let followups = [];
   let followupsHead = '';
-  let provider = 'rag';
-  let externalAiAvailable = false;
 
   function renderSources() {
     if (!sources.length) {
@@ -60,12 +59,11 @@ export function ragChatView(app) {
           ${disclaimer('strong', { context: DISCLAIMER_CONTEXT.F27 })}
         </div>
         <div class="rag-chat-controls">
-          <label for="rag-provider">답변 다듬기</label>
-          <select id="rag-provider" class="param-input" aria-label="외부 AI 사용 모듈 선택">
-            <option value="rag" ${provider === 'rag' ? 'selected' : ''}>사용 안 함 · RAG만</option>
-            <option value="openai_compatible" ${provider === 'openai_compatible' ? 'selected' : ''} ${externalAiAvailable ? '' : 'disabled'}>외부 AI · OpenAI 호환</option>
-          </select>
-          <small id="rag-provider-note">${externalAiAvailable ? '외부 AI를 선택해도 검색 원문만 전달해 문장을 다듬습니다.' : '외부 AI가 설정되지 않아 RAG 검색 결과만 사용합니다.'}</small>
+          <!-- 2026-08-16: "답변 다듬기" 선택(RAG만 / 외부 AI · OpenAI 호환)을 없앴습니다.
+               외부 AI 경로가 유료 API 호출이었고, 절대 제약 1이 "LLM 유료 API 비용 0원"
+               입니다. 고를 것이 하나뿐인 셀렉트는 선택지가 아니라 거짓말이라 통째로
+               걷고 무엇으로 답하는지를 문장으로 적습니다. -->
+          <small id="rag-provider-note">답변은 검색된 학습 문서 원문만 조립해 만듭니다. 외부 AI를 부르지 않습니다.</small>
           <span id="rag-status" class="badge badge-gray">연결 확인 중</span>
         </div>
       </section>
@@ -91,7 +89,6 @@ export function ragChatView(app) {
 
     const messagesEl = app.querySelector('#rag-messages');
     messagesEl.scrollTop = messagesEl.scrollHeight;
-    app.querySelector('#rag-provider').addEventListener('change', (event) => { provider = event.target.value; });
     app.querySelectorAll('.rag-example').forEach((button) => button.addEventListener('click', () => ask(button.dataset.query)));
     app.querySelectorAll('.rag-followup').forEach((button) => button.addEventListener('click', () => ask(button.dataset.query)));
     app.querySelector('#rag-form').addEventListener('submit', (event) => {
@@ -104,22 +101,14 @@ export function ragChatView(app) {
 
   async function updateStatus() {
     try {
-      const response = await fetch('/api/rag/status');
-      const data = await response.json();
+      // 옛 코드는 `res.ok` 를 안 보고 본문만 읽어서, 비-2xx 여도 아래 갱신이 돌았다.
+      // `apiFetch` 는 비-2xx 에서 던지므로 그때는 catch 의 'RAG 상태 확인 실패' 로 간다.
+      // `rag_status` 는 예외를 던지지 않게 짜여 있어(`routers/rag.py`) 정상 경로에서
+      // 이 차이는 드러나지 않는다 — 프록시·게이트웨이 오류일 때만 갈린다.
+      const data = await api.ragStatus();
       const status = app.querySelector('#rag-status');
-      const providerSelect = app.querySelector('#rag-provider');
       const providerNote = app.querySelector('#rag-provider-note');
-      if (!status || !providerSelect || !providerNote) return;
-      externalAiAvailable = Boolean(data.external_ai?.openai_compatible_available);
-      const externalOption = providerSelect.querySelector('option[value="openai_compatible"]');
-      externalOption.disabled = !externalAiAvailable;
-      if (!externalAiAvailable && provider === 'openai_compatible') {
-        provider = 'rag';
-        providerSelect.value = 'rag';
-      }
-      providerNote.textContent = externalAiAvailable
-        ? '외부 AI를 선택해도 검색 원문만 전달해 문장을 다듬습니다.'
-        : '외부 AI가 설정되지 않아 RAG 검색 결과만 사용합니다.';
+      if (!status || !providerNote) return;
       // 저장소가 Qdrant → Supabase pgvector 로 바뀌면서 응답 키가 `qdrant` 에서
       // `vector_store` 가 됐다(D-08 · CN-021). 저장소 이름을 스키마에 박아 두면
       // 옮길 때마다 화면이 거짓말을 한다. `collection_available` → `indexed`,
@@ -149,19 +138,19 @@ export function ragChatView(app) {
     messages.push({ role: 'user', text: query }, { role: 'assistant loading', text: '문서에서 찾는 중…' });
     render();
     try {
-      const response = await fetch('/api/rag/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, top_k: 5, provider }),
-      });
-      const data = await response.json();
+      // 변수명을 `data` 로 유지해야 한다 — `scripts/verify_rag_api.py` 가 이 파일 원문에서
+      // 문자열 `data.followups` · `data.followups_head` 를 grep 해 R-04 이행을 판정한다.
+      // 구조분해로 바꾸면 검증이 깨진다.
+      const data = await api.ragAsk({ query, top_k: 5 });
       messages.pop();
-      if (!response.ok) throw new Error(data.detail || '문서 검색에 실패했습니다.');
       sources = data.sources || [];
       followups = Array.isArray(data.followups) ? data.followups : [];
       followupsHead = data.followups_head || '';
       messages.push({ role: 'assistant', text: data.answer || '관련 문서를 찾지 못했습니다.' });
     } catch (error) {
+      // 실패 시 `messages.pop()` 은 **여기 한 번만** 돈다. 옛 코드는 본문을 먼저 읽고
+      // pop 한 뒤 던져서 catch 에서 또 pop 했고, 그래서 사용자 질문 말풍선까지 지워졌다.
+      // 이제 로딩 말풍선만 지워지고 질문이 남는다 — 회귀가 아니라 그 결함이 사라진 것이다.
       messages.pop();
       messages.push({ role: 'error', text: error.message || '문서 검색에 실패했습니다.' });
     }

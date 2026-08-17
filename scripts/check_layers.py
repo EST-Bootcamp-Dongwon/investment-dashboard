@@ -15,19 +15,35 @@
 대조표가 이 축을 🔶 로 적어 둔 근거가 지금까지 문장이었고, 이제 숫자였기 때문이다.
 
 같은 날 [CN-065](docs/spec/00-index/변경이력.md#cn-065) 분해 순서 ⑤~⑦ 이 셋을 모두
-치웠다. **6 / 6 통과이고 축은 ✅ 다.** 그래서 이 검사의 성격이 바뀌었다 — 목표를
-가리키던 검사에서 **지켜 낸 것을 지키는 검사**로.
+치웠다. 그래서 이 검사의 성격이 바뀌었다 — 목표를 가리키던 검사에서 **지켜 낸 것을
+지키는 검사**로.
+
+## 6개에서 7개가 됐다 (2026-08-16 오후)
+
+아키텍처 5절 표는 명령을 **6개**로 적었고 여섯 모두 `app/backend/` 를 본다.
+**7번만 `app/frontend/js/` 를 본다** — *"`api.js` 외 파일이 `fetch` 를 직접 부르지
+않음"*. 축을 넓힌 것이 아니라, 같은 축의 프론트 쪽 절반이 그때까지 비어 있었다.
+
+근거는 이 저장소 문서 두 곳이다.
+
+* `docs/spec/40-API/공통-응답과-에러.md` §9 조치 9번 — *"`api.js` 를 단일 창구로"* 를
+  **축: 계층 분리** 로 이미 분류해 두었다.
+* `quant-contract/docs/contracts/api-contract.md` §8.1 — API 계약의 **선행 조건**으로
+  이 검사를 지목했다. 받는 쪽이 8곳이면 계약이 강제되지 않기 때문이다.
+
+7번은 만들자마자 통과했다. 같은 날 오후에 회수를 먼저 끝냈기 때문이다
+(7파일 10건 → 0건). **그래서 이 규칙은 처음부터 "지켜 낸 것을 지키는" 쪽이다.**
 
 종료 코드는 셋 그대로다 (`verify_rag_api.py` 가 세운 관례 — 1은 검사 실패,
 2는 자격증명 없음).
 
-    0  6개 전부 통과 → 축이 ✅ 로 올라간다
+    0  7개 전부 통과 → 축이 ✅ 로 올라간다
     1  **기준선보다 나빠졌다** — 회귀다. 고쳐야 한다
     2  기준선 그대로이고 목표에 미달 — 아직 분해가 안 끝났다
 
 1과 2를 가르지 않으면 이 검사는 **언제나 실패하는 검사**가 되고, 언제나 실패하는
 검사는 아무도 보지 않는다(테스트-계획 4.1절이 오탐에 대해 한 말과 같다).
-지금은 6개가 다 통과하므로 실질적으로 0 과 1 만 나온다.
+지금은 7개가 다 통과하므로 실질적으로 0 과 1 만 나온다.
 
 ## 기준선을 왜 파일에 적는가
 
@@ -71,6 +87,8 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from sourcetext import code_only, numbered  # noqa: E402
 
 BACKEND = ROOT / "app" / "backend"
+FRONTEND_JS = ROOT / "app" / "frontend" / "js"
+API_MODULE = FRONTEND_JS / "api.js"
 
 
 @dataclass(frozen=True)
@@ -101,14 +119,47 @@ RULES = (
          'grep -rn "from ..routers|from ..services" app/backend/clients/', 0, "==", 0),
     Rule(6, "중복 정의 없음",
          'grep -rn "^def configure_matplotlib_korean_font" app/backend/', 1, "==", 1),
+    # ── 7번은 아키텍처 5절 표에 없던 규칙이다 ─────────────────────────────
+    #
+    # 앞의 여섯은 전부 `app/backend/` 를 본다. 이것만 `app/frontend/js/` 를 본다.
+    # 넣은 근거는 두 곳이다.
+    #
+    # ① `docs/spec/40-API/공통-응답과-에러.md` §9 조치 9번이 *"`api.js` 를 단일
+    #    창구로"* 를 **축: 계층 분리 · 크기: 소** 로 이미 분류해 두었다. 축이 같다.
+    # ② `quant-contract/docs/contracts/api-contract.md` §8.1 이 계약의 선행 조건으로
+    #    *"강제 장치는 `check_layers.py` 에 「api.js 외 파일의 `fetch(` 금지」 검사를
+    #    추가한다"* 를 지목했다.
+    #
+    # **왜 계약이 이걸 요구하는가.** 2026-08-16 오전 실측으로 `api.js` 밖에서
+    # `fetch()` 를 부르는 곳이 **7개 파일 10건**이었다. 그 상태에서는 API 계약을
+    # 아무리 잘 써도 받는 쪽이 8곳이라 강제되지 않는다. 같은 날 회수해 0건이 됐고,
+    # 이 규칙이 **되돌아가는 것을 회귀로 잡는다.**
+    #
+    # 기준선을 0 으로 적은 이유: 규칙 2~5 와 같다. 회수가 이미 끝났으므로 기준선이
+    # 곧 목표다. 하나라도 늘면 `value > baseline` 이라 종료 코드 1(회귀)이 난다.
+    Rule(7, "api.js 외 프론트 파일이 fetch 를 직접 부르지 않음",
+         'grep -rn "fetch(" app/frontend/js/ --include=*.js  # api.js 제외', 0, "==", 0),
 )
 
 
-def _count(directory: Path, pattern: re.Pattern[str], glob: str = "*.py") -> list[str]:
-    """주석·독스트링을 걷어낸 코드에서 패턴이 걸리는 `파일:줄` 목록."""
+def _count(
+    directory: Path,
+    pattern: re.Pattern[str],
+    glob: str = "*.py",
+    skip: frozenset[Path] = frozenset(),
+) -> list[str]:
+    """주석·독스트링을 걷어낸 코드에서 패턴이 걸리는 `파일:줄` 목록.
+
+    `code_only` 가 확장자를 보고 `.py`·`.js` 전처리를 고르므로(`sourcetext.py:123`)
+    프론트 규칙에도 그대로 쓴다. **주석을 걷는 것이 규칙 7번에서 특히 중요하다** —
+    `api.js` 의 머리말이 "밖에서 `fetch()` 를 부르는 곳이 10건이었다" 를 설명하고,
+    걷지 않으면 그 설명이 자기 규칙에 걸린다(규칙 4번에서 이미 겪은 일이다).
+
+    `skip` 은 규칙 7번의 `api.js` 처럼 **검사에서 면제되는 파일**이다.
+    """
     found: list[str] = []
     for path in sorted(directory.rglob(glob)):
-        if "__pycache__" in path.parts:
+        if "__pycache__" in path.parts or path in skip:
             continue
         for line_no, line in numbered(code_only(path)):
             if pattern.search(line):
@@ -127,6 +178,10 @@ def measure() -> dict[int, tuple[int, list[str]]]:
         4: _sized(_count(BACKEND / "services", re.compile(r"HTTPException|fastapi"))),
         5: _sized(_count(BACKEND / "clients", re.compile(r"from \.\.routers|from \.\.services"))),
         6: _sized(_count(BACKEND, re.compile(r"^def configure_matplotlib_korean_font"))),
+        # 회수의 **결과물**은 위반이 아니다. `apiFetch(`·`fetchAssetText(` 는 애초에
+        # `fetch(` 와 글자가 다르고, 낱말 경계(`\b`)가 `myfetch(` 처럼 `fetch` 로 끝나는
+        # 다른 이름까지 막는다. 반대로 `window.fetch(` 는 `.` 이 경계라 제대로 잡힌다.
+        7: _sized(_count(FRONTEND_JS, re.compile(r"\bfetch\("), "*.js", frozenset({API_MODULE}))),
     }
 
 
