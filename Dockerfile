@@ -30,6 +30,17 @@ COPY scripts/build_sidebar_partial.py ./scripts/build_sidebar_partial.py
 RUN chmod +x ./scripts/upload_docs_to_qdrant.sh \
     && python ./scripts/build_sidebar_partial.py
 
+# 비루트로 돈다 (01 검증본 5.2절). 컨테이너가 뚫렸을 때 root 로 시작하지 않게 한다.
+#
+# `app/generated/` 를 **여기서 미리 만들고 소유권을 넘긴다.** 그 폴더는
+# `.dockerignore` 가 빼므로 이미지에 없고, `paths.ensure()` 가 쓰는 시점에 만드는데,
+# 그때는 이미 appuser 라 `/app/app/` 에 mkdir 할 권한이 없다. 만들어 두지 않으면
+# `/api/genai/*` · `/api/cv/*` · 백테스트 리포트 저장이 전부 조용히 실패한다.
+RUN useradd --create-home --uid 1001 appuser \
+    && mkdir -p /app/app/generated \
+    && chown -R appuser:appuser /app/app/generated
+USER appuser
+
 EXPOSE 8000
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=10 \
