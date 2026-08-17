@@ -8,11 +8,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       fonts-nanum \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt .
+# 로컬 이미지는 **dev 쪽**을 쓴다. 배포본(`requirements.txt`)에서 빠진 matplotlib·pykrx 가
+# 여기서는 있어야 서버 렌더 차트 16곳과 시가총액 보강이 돈다. dev 파일이 배포용을
+# `-r` 로 포함하므로 두 벌이 갈라지지 않는다.
+COPY requirements.txt requirements-dev.txt ./
+# `grep -v '^torch$'` + CPU 인덱스 2단 설치가 여기 있었다. `torch`·`diffusers`·
+# `opencv-python-headless` 를 의존성에서 걷어내면서(AGENTS.md) 할 일이 없어졌다 —
+# 이미지도 749.6 MB 가볍다(절대 제약 5).
 RUN --mount=type=cache,target=/root/.cache/pip \
-    grep -v '^torch$' requirements.txt > requirements.nogpu.txt \
-    && pip install --index-url https://download.pytorch.org/whl/cpu torch \
-    && pip install -r requirements.nogpu.txt
+    pip install -r requirements-dev.txt
 
 COPY app/ ./app/
 RUN mkdir -p app/frontend/vendor \

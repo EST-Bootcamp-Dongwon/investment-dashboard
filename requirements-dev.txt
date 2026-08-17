@@ -1,0 +1,24 @@
+# 로컬·Docker 용 의존성 — `Dockerfile` 과 개발 환경이 이것을 쓴다.
+#
+# 배포용(`requirements.txt`)의 **상위집합**이다. 왜 나뉘었는지, 무엇이 왜 빠졌는지는
+# 그 파일 머리말에 있다. 여기 적는 것은 **배포본에는 없고 로컬에는 있어야 하는 것**뿐이다.
+#
+# 로컬은 500 MB 제약을 받지 않는다. 받는 것은 Vercel 함수 하나뿐이다.
+
+-r requirements.txt
+
+# ── 차트 ────────────────────────────────────────────────────────────────────
+# 서버 렌더 차트 16곳(`services/{quant_charts,industry,macro,ml_charts}.py`).
+# 배포본에는 없고, 없으면 `charting.require_matplotlib()` 이 503 + 안내 문구를 낸다.
+# `Dockerfile` 의 `fonts-nanum` 이 이것과 짝이다 — 빼면 한글 라벨이 □ 가 된다.
+matplotlib==3.11.1
+
+# ── 시장 데이터 ─────────────────────────────────────────────────────────────
+# `services/dart.py:107` 의 시가총액·종가 보강(group-network). matplotlib 을 하드
+# 의존해서 배포본에서 빠졌다 — 그 사정은 `requirements.txt` 머리말에 있다.
+pykrx==1.2.8
+
+# ── 로컬 실행 편의 ──────────────────────────────────────────────────────────
+# 자동 리로드(watchfiles) · uvloop · httptools. 배포본에서는 Vercel 이 자체 어댑터를
+# 쓰므로 20.8 MB 를 그냥 버리는 셈이라 뺐다.
+uvicorn[standard]==0.52.3

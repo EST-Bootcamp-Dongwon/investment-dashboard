@@ -43,16 +43,17 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
 from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 try:
     from .openapi_docs import install_openapi
+    from .security import install as install_security
     from .services.errors import DomainError
 except ImportError:  # `uvicorn main:app` 를 app/backend 에서 실행하는 경우
     from openapi_docs import install_openapi  # type: ignore
+    from security import install as install_security  # type: ignore
     from services.errors import DomainError  # type: ignore
 
 try:
@@ -83,13 +84,9 @@ app = FastAPI(
 
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS 화이트리스트(`CORS_ORIGINS`)와 보안 헤더 4종 + CSP. 본문은 `security.py` 에 있다 —
+# 이 파일은 200줄 미만이어야 한다(`check_layers.py` 규칙 1).
+install_security(app)
 
 
 @app.middleware("http")
@@ -182,4 +179,9 @@ install_openapi(app)
 # ─────────────────────────────────────────────────────────────────────────────
 # 반드시 맨 마지막이다. `"/"` 에 걸리므로 위로 올리면 API 경로를 먼저 가로챈다.
 
-app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+# 폴더가 있을 때만 건다. `StaticFiles` 는 없는 디렉터리를 받으면 **생성 시점에**
+# RuntimeError 를 던져 앱이 통째로 안 뜬다. Vercel 배포본은 프런트를 CDN 이 맡고
+# (배포-전략 4.2절) 함수 번들에 `app/frontend/` 를 넣지 않으므로 이 조건이 필요하다.
+# 로컬·Docker 에서는 폴더가 늘 있으므로 동작이 달라지지 않는다.
+if FRONTEND_DIR.is_dir():
+    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")

@@ -59,10 +59,10 @@ import io
 from typing import Any
 
 try:
-    from ..charting import configure_matplotlib_korean_font
+    from .. import charting
     from ..indicators import calc_rsi
 except ImportError:  # `uvicorn main:app` 를 app/backend 에서 실행하는 경우
-    from charting import configure_matplotlib_korean_font  # type: ignore
+    import charting  # type: ignore
     from indicators import calc_rsi  # type: ignore
 
 # 다섯 그림이 공유하는 어두운 배경 색이다. 화면(`styles.css`)의 slate 계열과 맞춘 값이라
@@ -93,13 +93,10 @@ def _data_url(plt: Any, fig: Any) -> str:
 
 def backtest(*, fast_ma: int, slow_ma: int, n_days: int) -> dict[str, object]:
     """MA 크로스오버 전략 백테스트. `routers/quant.py:106~228` 그대로다."""
-    import matplotlib
-    matplotlib.use("Agg")
+    plt = charting.require_matplotlib()
     import matplotlib.gridspec as gridspec
-    import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
-    configure_matplotlib_korean_font(plt)
 
     rng = np.random.default_rng(42)
     dt = 1 / 252
@@ -216,11 +213,8 @@ def backtest(*, fast_ma: int, slow_ma: int, n_days: int) -> dict[str, object]:
 
 def portfolio(*, n_simulations: int, risk_free: float) -> dict[str, object]:
     """효율적 프론티어 + Sharpe 극대화. `routers/quant.py:231~322` 그대로다."""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    plt = charting.require_matplotlib()
     import numpy as np
-    configure_matplotlib_korean_font(plt)
 
     tickers = ["KOSPI", "S&P500", "국채10Y", "금(Gold)", "BTC"]
     mu_ann = np.array([0.10, 0.12, 0.04, 0.07, 0.30])
@@ -312,11 +306,8 @@ def financial_knowledge(*, n_simulations: int, risk_free: float) -> dict[str, ob
     값을 계층 사이로 넘기면 "어딘가에서 쓰이겠거니" 하고 읽히므로 여기서 끊었다.
     필드 자체는 API 계약이라 라우터에 그대로 남겨 두었다.
     """
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    plt = charting.require_matplotlib()
     import numpy as np
-    configure_matplotlib_korean_font(plt)
 
     coverage = [
         {
@@ -525,11 +516,8 @@ def financial_knowledge(*, n_simulations: int, risk_free: float) -> dict[str, ob
 
 def risk(*, confidence: float, n_scenarios: int, portfolio_value: float) -> dict[str, object]:
     """VaR / CVaR 리스크 분석. `routers/quant.py:542~602` 그대로다."""
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    plt = charting.require_matplotlib()
     import numpy as np
-    configure_matplotlib_korean_font(plt)
 
     rng = np.random.default_rng(42)
     mu, sigma = 0.0004, 0.012
@@ -584,16 +572,13 @@ def risk(*, confidence: float, n_scenarios: int, portfolio_value: float) -> dict
 
 def pipeline(*, ticker: str, fast_ma: int, slow_ma: int) -> dict[str, object]:
     """퀀트 실전 4단계 파이프라인. `routers/quant.py:605~711` 그대로다."""
-    import matplotlib
-    matplotlib.use("Agg")
+    plt = charting.require_matplotlib()
     import matplotlib.gridspec as gridspec
-    import matplotlib.pyplot as plt
     import numpy as np
     import pandas as pd
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.metrics import accuracy_score
     from sklearn.model_selection import TimeSeriesSplit
-    configure_matplotlib_korean_font(plt)
 
     rng = np.random.default_rng(42)
     n = 1260

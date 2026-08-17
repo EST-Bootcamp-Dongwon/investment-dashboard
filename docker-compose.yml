@@ -25,6 +25,13 @@ services:
       #
       # 파일(`clients/rag_llm.py`)만 지우면 되살아납니다. compose·`.env.example`·
       # 라우터·화면을 같이 걷어야 완료입니다(05 검증본 P0-7).
+      # CORS 화이트리스트 (보안과-시크릿 3.3절). **비면 아무 오리진도 허용하지 않습니다.**
+      # 이 구성은 프런트와 API 가 같은 컨테이너·같은 포트라 동일 출처이고, 동일 출처면
+      # 브라우저가 CORS 를 태우지 않으므로 비워 두어도 화면이 깨지지 않습니다.
+      # 프런트를 다른 포트에서 따로 띄울 때만 그 오리진을 적으세요.
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
+      # report-only(기본) · enforce · off. 2.3절 1단계가 report-only 입니다.
+      CSP_MODE: ${CSP_MODE:-report-only}
       DART_API_KEY: ${DART_API_KEY:-}
       KOSIS_API_KEY: ${KOSIS_API_KEY:-}
       BOK_API_KEY: ${BOK_API_KEY:-}

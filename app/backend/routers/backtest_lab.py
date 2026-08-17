@@ -35,24 +35,27 @@ F05 는 `routers/quant.py` 에서 도메인을 꺼내 왔습니다. F28 은 이 
 from __future__ import annotations
 
 from datetime import date, datetime
-from pathlib import Path
 
 from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
 
 try:
+    from .. import paths
     from ..clients import backtest_repo, lean_prices, supabase_client
     from ..services import backtest as service
     from . import owner
 except ImportError:  # `uvicorn main:app` 를 app/backend 에서 실행하는 경우
+    import paths  # type: ignore
     from clients import backtest_repo, lean_prices, supabase_client  # type: ignore
     from routers import owner  # type: ignore
     from services import backtest as service  # type: ignore
 
 router = APIRouter(prefix="/api/backtest-lab", tags=["backtest-lab"])
 
-_ROOT = Path(__file__).resolve().parents[3]
-GENERATED_DIR = _ROOT / "app" / "generated" / "backtest-lab"
+# 경로 출처를 `paths` 로 옮겼다. 이 파일의 저장 코드는 원래부터 옳았고(요청 처리 중 ·
+# `try/except OSError`), 바뀐 것은 **어디에 쓰느냐**뿐이다 — Vercel 에서는 `/tmp` 다.
+# `_ROOT` 는 그러면서 쓸 자리가 없어졌다(경로 계산이 `paths.ROOT_DIR` 한 곳으로 모였다).
+_GENERATED_SUBDIR = "backtest-lab"
 
 _SAVE_FAILED = "백테스트 결과를 저장할 수 없습니다. 잠시 후 다시 시도해 주세요."
 _READ_FAILED = "백테스트 이력을 불러올 수 없습니다. 잠시 후 다시 시도해 주세요."
@@ -333,10 +336,11 @@ def build_report(payload: RunRequest) -> dict:
 
     saved = ""
     try:
-        GENERATED_DIR.mkdir(parents=True, exist_ok=True)
-        target = GENERATED_DIR / filename
+        target = paths.ensure(_GENERATED_SUBDIR) / filename
         target.write_text(html, encoding="utf-8")
-        saved = str(target.relative_to(_ROOT))
+        # `relative_to(_ROOT)` 를 직접 쓰지 않습니다 — 경로가 `/tmp` 로 옮겨지면
+        # `ValueError` 가 나고, 그건 아래 `OSError` 가드를 그냥 지나쳐 500 이 됩니다.
+        saved = paths.describe(target)
     except OSError:
         # 저장에 실패해도 브라우저 다운로드는 되도록 응답은 그대로 돌려줍니다.
         saved = ""

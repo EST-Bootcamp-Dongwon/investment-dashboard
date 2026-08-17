@@ -34,6 +34,11 @@ import base64
 import io
 from typing import Any
 
+try:
+    from .. import charting
+except ImportError:  # `uvicorn main:app` 를 app/backend 에서 실행하는 경우
+    import charting  # type: ignore
+
 
 def _png_base64(fig: Any, plt: Any, *, dpi: int) -> str:
     """그림을 PNG 로 굽고 base64 문자열로 만든 뒤 **닫는다.**
@@ -54,14 +59,11 @@ def _png_base64(fig: Any, plt: Any, *, dpi: int) -> str:
 
 def decision_boundary() -> dict[str, str]:
     """로지스틱 회귀의 결정 경계. `routers/ml.py:159~201` 그대로다."""
-    import matplotlib
+    plt = charting.require_matplotlib(korean_font=False)
     import numpy as np
     from sklearn.datasets import make_classification
     from sklearn.linear_model import LogisticRegression
     from sklearn.model_selection import train_test_split
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
 
     X, y = make_classification(
         n_samples=240,
@@ -95,14 +97,11 @@ def decision_boundary() -> dict[str, str]:
 
 def kmeans(*, n_samples: int, n_clusters: int, cluster_std: float) -> dict[str, object]:
     """KMeans 군집 + 엘보 곡선. `routers/ml.py:257~312` 그대로다."""
-    import matplotlib
+    plt = charting.require_matplotlib(korean_font=False)
     from sklearn.cluster import KMeans
     from sklearn.datasets import make_blobs
     from sklearn.metrics import silhouette_score
     from sklearn.preprocessing import StandardScaler
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
 
     X, _ = make_blobs(
         n_samples=n_samples,
@@ -152,7 +151,7 @@ def svm(*, kernel: str, c: float) -> dict[str, object]:
     인자 이름만 `C` → `c` 로 낮췄다. 요청 필드는 `C` 로 남는다(화면이 그 이름을
     보낸다). 파이썬 쪽에서 대문자 한 글자 인자는 상수로 읽히기 쉬워서다.
     """
-    import matplotlib
+    plt = charting.require_matplotlib(korean_font=False)
     import numpy as np
     from sklearn.datasets import make_classification
     from sklearn.inspection import DecisionBoundaryDisplay
@@ -160,9 +159,6 @@ def svm(*, kernel: str, c: float) -> dict[str, object]:
     from sklearn.model_selection import train_test_split
     from sklearn.preprocessing import StandardScaler
     from sklearn.svm import SVC
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
 
     X, y = make_classification(
         n_samples=300, n_features=2, n_redundant=0, n_informative=2,
@@ -208,15 +204,12 @@ def mlp(*, hidden_layers: str, max_iter: int, n_samples: int) -> dict[str, objec
     `hidden_layers` 는 `"128,64,32"` 같은 문자열로 온다. **모양 검사는 라우터의
     `pattern` 이 이미 끝냈고**(`^\\d+(,\\d+)*$`), 여기서는 정수 튜플로 바꾸기만 한다.
     """
-    import matplotlib
+    plt = charting.require_matplotlib(korean_font=False)
     from sklearn.datasets import make_classification
     from sklearn.metrics import accuracy_score, classification_report
     from sklearn.model_selection import train_test_split
     from sklearn.neural_network import MLPClassifier
     from sklearn.preprocessing import StandardScaler
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
 
     layers = tuple(int(x) for x in hidden_layers.split(","))
 
@@ -255,15 +248,12 @@ def mlp(*, hidden_layers: str, max_iter: int, n_samples: int) -> dict[str, objec
 
 def linear_regression(*, degree: int, n_samples: int, noise: float) -> dict[str, object]:
     """다항 회귀 적합. `routers/ml.py:422~473` 그대로다."""
-    import matplotlib
+    plt = charting.require_matplotlib(korean_font=False)
     import numpy as np
     from sklearn.linear_model import LinearRegression
     from sklearn.metrics import mean_squared_error, r2_score
     from sklearn.pipeline import make_pipeline
     from sklearn.preprocessing import PolynomialFeatures
-
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
 
     rng = np.random.default_rng(42)
     X = rng.uniform(0, 10, size=(n_samples, 1))

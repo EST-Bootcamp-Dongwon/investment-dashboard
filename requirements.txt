@@ -1,22 +1,96 @@
-fastapi
-uvicorn[standard]
-orjson
-python-multipart
-python-dotenv
+# 배포용 의존성 — Vercel Python Function 이 이 파일만 읽는다.
+#
+# 로컬·Docker 는 `requirements-dev.txt` 를 쓴다(그쪽이 이 파일을 `-r` 로 포함한다).
+# 강사님 요건 3번("requirements.txt")을 충족하는 것도 이 파일이다.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+# ## 왜 나뉘었나 — 500 MB
+#
+# Vercel Hobby 의 Python 함수 크기 상한은 **압축 해제 500 MB** 다
+# (`docs/spec/60-운영/배포-전략.md` 1.1절). 현행 한 벌로는 1,649 MB 였다.
+#
+# ## 배포-전략 3.4절의 산수에 틀린 전제가 있었다 (2026-08-17 실측)
+#
+# 그 절은 *"matplotlib 을 뺀다"* 로 429.8 MB 를 계산했다. **matplotlib 줄을 지우는
+# 것으로는 matplotlib 이 빠지지 않는다.**
+#
+#     $ pip show pykrx
+#     Requires: deprecated, matplotlib, multipledispatch, numpy, pandas, requests
+#
+# `pykrx==1.2.8` 이 matplotlib 을 **하드 의존**한다. 그래서 matplotlib 줄만 지운
+# 조합은 실측 **543 MB (108.6 %)** 로 여전히 초과였다. 지렛대는 matplotlib 줄이
+# 아니라 **`pykrx`** 였다.
+#
+# 세 조합을 clean venv 로 실측했다 (pip·setuptools·wheel 제외한 site-packages):
+#
+#     ③ pykrx 제거 (matplotlib 이 딸려 나감) ·  sklearn 유지  →  426 MB  ( 85.2 %) ✅ 채택
+#     ④ sklearn 제거 (scipy 가 딸려 나감)   ·  pykrx  유지  →  336 MB  ( 67.2 %)
+#     ⑤ 둘 다 제거                                          →  231 MB  ( 46.2 %)
+#
+# ③ 을 고른 근거는 배포-전략 3.4절 그대로다 — ④ 는 **대체 수단이 없는** F28 백테스트
+# 실험실을 통째로 잃고, ③ 이 잃는 것은 **렌더링 위치**와 시가총액 보강 하나다.
+#
+# **이 파일 그대로의 최종 실측은 432 MB (86.4 %)** 다(2026-08-17). ③ 의 426 MB 와
+# 6 MB 차이 나는 것은 아래 `pandas` 핀 때문이다. 여기에 애플리케이션 코드
+# (`app/backend/` 1 MB) · `docs/*.md`(360 KB) · `lean-hyundai/` 3파일이 더해진다.
+# 배포-전략 8절 1번의 **(확인 필요)** 중 site-packages 몫은 이것으로 닫힌다 —
+# Vercel 런타임 자체가 차지하는 몫은 첫 배포 로그에서 확인해야 한다.
+#
+# ## 그래서 무엇을 잃는가
+#
+# | 잃는 것 | 대응 |
+# | --- | --- |
+# | 서버 렌더 차트 16곳 | `charting.require_matplotlib()` 이 **503 + 안내 문구**를 낸다. ApexCharts 이전이 끝나는 화면부터 되살아난다 (ADR-DB-0002) |
+# | `pykrx` 시가총액 보강 (group-network) | `services/dart.py:107` 이 원래부터 `try/except` 로 `{}` 를 돌려준다. 화면은 시가총액 칸만 빈다 |
+#
+# > 🔍 **pykrx 의 matplotlib 의존은 장식이다.** `pykrx/__init__.py:4~5` 가
+# > `matplotlib.font_manager`·`pyplot` 을 import 하는 이유는 번들된 NanumBarunGothic 을
+# > 등록해 사용자의 그래프에 한글이 나오게 하려는 것뿐이고, 우리가 쓰는
+# > `get_market_cap_by_ticker` 의 데이터 경로(`data.krx.co.kr` 의 JSON 한 방,
+# > `bld=dbms/MDC/STAT/standard/MDCSTAT01501`)와는 무관하다. 그 한 호출만
+# > `clients/` 에 직접 구현하면 90 MB 를 아끼면서 기능도 지킨다 — **다음 작업 후보**다.
+#
+# ## 버전 핀
+#
+# 직접 의존만 핀한다. 전이 의존은 열어 둔다 — 전량 freeze 는 재현성이 높은 대신
+# 이 파일이 강사님 요건의 읽을거리 노릇을 못 하게 된다. 값은 2026-08-17 clean venv
+# 해석 결과다.
+#
+# > ⚠️ `AGENTS.md` 는 이 파일을 *"`uv export` 생성물"* 이라 적고 직접 편집을 금한다.
+# > **아직 생성기가 없다** — `pyproject.toml`·`uv.lock`·`tasks.py` 가 이 저장소에
+# > 하나도 없고 `uv` 도 설치돼 있지 않다(2026-08-17 실측). 그것들이 생기면 이 파일은
+# > 생성물로 바뀌고, 위 주석은 `pyproject.toml` 로 옮겨야 한다.
+# ─────────────────────────────────────────────────────────────────────────────
 
-# 데이터·시장 조회와 차트 생성
-numpy
-pandas
-openpyxl
-yfinance
-pykrx
-matplotlib
+# ── 웹 ──────────────────────────────────────────────────────────────────────
+fastapi==0.141.1
+pydantic==2.13.4
+# `uvicorn[standard]` 가 아니다. Vercel 은 자체 ASGI 어댑터를 쓰므로 uvloop·httptools·
+# watchfiles(20.8 MB)가 배포본에서 하는 일이 없다. 로컬은 dev 쪽에서 [standard] 를 쓴다.
+uvicorn==0.52.3
+orjson==3.12.0
+# `POST /api/tax/upload` 의 multipart 파싱. FastAPI 가 없으면 422 를 낸다.
+python-multipart==0.0.32
+python-dotenv==1.2.3
 
-# 백엔드 라우터의 분석·이미지 처리 기능
-scikit-learn
-torch
-diffusers
-# 원본은 opencv-python(GUI 빌드)이었는데, python:3.12-slim 에는 libxcb.so.1 이 없어
-# `import cv2` 자체가 ImportError 로 실패했다(=/api/cv/circle-animation 이 항상 500).
-# 이 앱은 VideoWriter·circle 만 쓰고 창을 띄우지 않으므로 headless 빌드가 맞다.
-opencv-python-headless
+# ── 데이터·시장 조회 ────────────────────────────────────────────────────────
+numpy==2.5.2
+# **2.x 에 머무는 이유는 `pykrx` 다.** 배포본에는 pykrx 가 없으니 3.0 을 쓸 수 있지만,
+# 그러면 로컬 Docker(=dev, pykrx 포함)와 배포본의 pandas 메이저 버전이 갈라진다.
+#
+#     $ docker build .        # 실측 2026-08-17 — pandas==3.0.5 로 핀했을 때
+#     ERROR: ResolutionImpossible
+#     pykrx 1.2.8 depends on pandas<3.0 and >=2.2.0
+#
+# 배포-전략 3.6절이 경계한 **"Docker 는 되는데 Vercel 은 안 된다"** 의 거울상이다.
+# 두 환경이 같은 pandas 를 쓰는 쪽이 그 위험을 없앤다. pykrx 가 3.0 을 받는 날 올린다.
+pandas==2.3.3
+# `routers/tax.py:154` 의 `pd.read_excel`.
+openpyxl==3.1.5
+yfinance==1.6.0
+
+# ── 분석 ────────────────────────────────────────────────────────────────────
+# 남긴다. `services/backtest.py` 가 `hd_core` 를, `hd_core.py:25` 가
+# `HistGradientBoostingRegressor` 를 쓴다(F28). scipy 138.3 MB 가 전이로 딸려 오지만
+# **브라우저에서 대체할 수 없는 기능**이라 위 ④ 를 고르지 않았다.
+scikit-learn==1.9.0

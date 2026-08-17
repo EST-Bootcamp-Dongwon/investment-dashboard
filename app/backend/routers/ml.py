@@ -4,20 +4,22 @@ from __future__ import annotations
 # os 는 /api/genai/text-to-image 의 DIFFUSERS_MODEL_ID 조회에 쓰이는데 원본에 import 가
 # 없었다. CUDA 가 없는 환경에서는 그 앞의 503 가드에 먼저 걸려 드러나지 않던 버그다.
 import os
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 try:
+    from .. import paths
     from ..services import ml_charts
 except ImportError:  # `uvicorn main:app` 를 app/backend 에서 실행하는 경우
+    import paths  # type: ignore
     from services import ml_charts  # type: ignore
 
-ROOT_DIR = Path(__file__).resolve().parents[3]
-GENERATED_DIR = ROOT_DIR / "app" / "generated"
-GENERATED_DIR.mkdir(parents=True, exist_ok=True)
+# `GENERATED_DIR.mkdir(...)` 이 여기 **import 시점에** 있었다. `main.py` 가 이 파일을
+# import 하므로 그 한 줄이 실패하면 앱 전체가 안 뜬다 — 서버리스는 `/tmp` 를 빼면
+# 읽기 전용이다(배포-전략 5절). 만드는 일은 쓰는 시점의 `paths.ensure()` 로 옮겼다.
+GENERATED_DIR = paths.GENERATED_DIR
 router = APIRouter()
 
 # `configure_matplotlib_korean_font` 사본이 여기에도 있었지만 **이 파일 안에서 한 번도
@@ -198,10 +200,26 @@ def random_forest(req: RandomForestRequest) -> dict[str, object]:
 
 @router.post("/api/cv/circle-animation")
 def circle_animation(req: CircleAnimationRequest) -> dict[str, str]:
-    import cv2
+    # `opencv-python-headless` 는 2026-08-17 에 의존성에서 빠졌다(AGENTS.md — 웹 요청
+    # 경로에서 쓰이지 않는다). 바로 아래 `/api/genai/text-to-image` 가 torch·diffusers 에
+    # 대해 이미 하고 있는 것과 같은 처리를 한다 — 없는 것은 **고장이 아니라 환경**이라
+    # 500 이 아니라 503 이다.
+    try:
+        import cv2
+    except ModuleNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "이 기능은 아카이브입니다. opencv-python-headless 가 설치돼 있지 않습니다. "
+                "쓰려면 `pip install opencv-python-headless` 로 따로 넣어 주세요."
+            ),
+        ) from exc
     import numpy as np
 
-    output_path = GENERATED_DIR / "circle_animation.mp4"
+    try:
+        output_path = paths.ensure() / "circle_animation.mp4"
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail=f"산출물 폴더에 쓸 수 없습니다: {exc}") from exc
 
     writer = cv2.VideoWriter(
         str(output_path), cv2.VideoWriter_fourcc(*"mp4v"), req.fps, (req.width, req.height)
@@ -328,7 +346,10 @@ def text_to_image(req: DiffusionRequest) -> dict[str, str]:
         width=req.width,
     ).images[0]
 
-    output_path = GENERATED_DIR / "diffusion_result.png"
+    try:
+        output_path = paths.ensure() / "diffusion_result.png"
+    except OSError as exc:
+        raise HTTPException(status_code=503, detail=f"산출물 폴더에 쓸 수 없습니다: {exc}") from exc
     image.save(output_path)
     return {"image_url": "/files/diffusion_result.png"}
 

@@ -21,9 +21,9 @@ except ImportError:  # `uvicorn main:app` 를 app/backend 에서 실행하는 �
     from services.errors import DomainError  # type: ignore
 
 try:
-    from ..charting import configure_matplotlib_korean_font
+    from .. import charting
 except ImportError:  # `uvicorn main:app` 를 app/backend 에서 실행하는 경우
-    from charting import configure_matplotlib_korean_font  # type: ignore
+    import charting  # type: ignore
 
 try:
     from ..clients.yahoo_prices import close_series
@@ -93,14 +93,11 @@ def _build_excl_label(excluded: list, excl_sectors: set, total_weight: float) ->
 
 def macro_realtime(*, tickers: list[str], period: str) -> dict[str, object]:
     import yfinance as yf
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    plt = charting.require_matplotlib()
     import matplotlib.gridspec as gridspec
     import numpy as np
     import pandas as pd
     import io, base64
-    configure_matplotlib_korean_font(plt)
 
     DARK   = "#0f172a"
     SURF   = "#1e293b"
@@ -277,15 +274,12 @@ def macro_realtime(*, tickers: list[str], period: str) -> dict[str, object]:
 
 def macro_kospi_ex(*, exclude_tickers: list[str], exclude_sectors: list[str], period: str) -> dict[str, object]:
     import yfinance as yf
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    plt = charting.require_matplotlib()
     import matplotlib.gridspec as gridspec
     import numpy as np
     import pandas as pd
     import io, base64
     from datetime import datetime, timezone
-    configure_matplotlib_korean_font(plt)
 
     # 제외 대상 결정
     excl_ticker_codes = {t.replace(".KS", "").replace(".KQ", "") for t in exclude_tickers}
@@ -499,13 +493,10 @@ def macro_kospi_ex_meta() -> dict[str, object]:
 
 
 def macro_simulation(*, n_days: int, seed: int) -> dict[str, object]:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    plt = charting.require_matplotlib()
     import matplotlib.gridspec as gridspec
     import numpy as np
     import io, base64
-    configure_matplotlib_korean_font(plt)
 
     DARK   = "#0f172a"
     SURF   = "#1e293b"

@@ -20,9 +20,9 @@ except ImportError:  # `uvicorn main:app` 를 app/backend 에서 실행하는 �
     from services.errors import DomainError  # type: ignore
 
 try:
-    from ..charting import configure_matplotlib_korean_font
+    from .. import charting
 except ImportError:  # `uvicorn main:app` 를 app/backend 에서 실행하는 경우
-    from charting import configure_matplotlib_korean_font  # type: ignore
+    import charting  # type: ignore
 
 
 SECTOR_LABELS = {
@@ -62,13 +62,10 @@ LIFECYCLE_DATA = {
 
 
 def industry_porter(*, industry: str, scores: dict[str, float]) -> dict[str, object]:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    plt = charting.require_matplotlib()
     import matplotlib.gridspec as gridspec
     import numpy as np
     import io, base64
-    configure_matplotlib_korean_font(plt)
 
     DARK, SURF, BORDER, TEXT, MUTED = "#0f172a","#1e293b","#334155","#e2e8f0","#64748b"
     ACCENT = "#3b82f6"
@@ -182,14 +179,11 @@ def industry_porter(*, industry: str, scores: dict[str, float]) -> dict[str, obj
 
 def industry_sector(*, tickers: list[str], period: str) -> dict[str, object]:
     import yfinance as yf
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    plt = charting.require_matplotlib()
     import matplotlib.gridspec as gridspec
     import numpy as np
     import pandas as pd
     import io, base64
-    configure_matplotlib_korean_font(plt)
 
     DARK, SURF, BORDER, TEXT, MUTED = "#0f172a","#1e293b","#334155","#e2e8f0","#64748b"
     COLORS = ["#3b82f6","#22c55e","#f59e0b","#ef4444","#a855f7",
@@ -370,13 +364,10 @@ def industry_peer(*, tickers: dict[str, str]) -> dict[str, object]:
 
 
 def industry_lifecycle(*, stage: str, industry: str) -> dict[str, object]:
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
+    plt = charting.require_matplotlib()
     import matplotlib.patches as mpatches
     import numpy as np
     import io, base64
-    configure_matplotlib_korean_font(plt)
 
     DARK, SURF, BORDER, TEXT, MUTED = "#0f172a","#1e293b","#334155","#e2e8f0","#64748b"
 

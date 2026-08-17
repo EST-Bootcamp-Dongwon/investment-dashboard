@@ -1,0 +1,89 @@
+# Vercel 배포 업로드에서 제외할 것. `.gitignore` 문법이다(`!` 로 되살릴 수 있다).
+#
+# ## `.dockerignore` 와 같은 함정이 여기에도 있다 ★
+#
+# 보안과-시크릿 1.3절은 제외 목록에 **`lean-*/` 와 `docs/`** 를 적었다. 배포-전략
+# 4.3절은 같은 문서군 안에서 **`lean-hyundai/` 3파일을 `includeFiles` 로 반드시
+# 넣으라**고 한다. 둘을 글자 그대로 함께 적용하면 서로 당긴다.
+#
+# **`.vercelignore` 가 이긴다.** 여기서 뺀 파일은 애초에 업로드되지 않으므로
+# `vercel.json` 의 `includeFiles` 가 집어넣을 것이 없다. 그래서 **남길 것을 먼저
+# 정한다.**
+#
+#     lean-hyundai/hd_core.py · download_price_data.py · make_report.py
+#         → `services/backtest.py` 가 sys.path 에 얹고 import 한다.
+#           빠지면 `/api/backtest-lab/config` 가 available:false 를 낸다.
+#     docs/*.md (9개, 360KB)
+#         → `routers/admin.py:60` 이 재색인 때 읽는다. 빠지면 관리자 화면에서
+#           말뭉치 8개가 전부 orphan 으로 보인다.
+#     app/frontend/**
+#         → `vercel.json` 의 `outputDirectory` 다. 이걸 빼면 사이트가 통째로 없다.
+#
+# 제외하는 것은 **이름이 비슷한 산출물 폴더들**이다 — `.dockerignore` 와 같은 구분이다.
+
+# ── 버전관리·에디터 ────────────────────────────────────────
+.git
+.gitignore
+.gitattributes
+.github
+.claude
+
+# ── 파이썬 가상환경·캐시 ───────────────────────────────────
+.venv
+venv
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+coverage/
+
+# ── 시크릿 (Public 저장소다. 번들에도 넣지 않는다) ─────────
+# 배포-전략 7절 점검표 7번이 보는 것이 이 구획이다.
+.env
+*.env
+!.env.example
+app/backend/.env
+*.key
+*.pem
+
+# ── 실행 산출물 ────────────────────────────────────────────
+*.log
+app/generated/
+# `vercel.json` 의 buildCommand 가 빌드 중에 CDN 에서 받아 만든다.
+app/frontend/vendor/
+
+# ── LEAN 워크스페이스·백테스트 산출물 ★ 가장 큰 절감 ───────
+# `lean-hyundai/` 는 위 머리말대로 **남긴다.** 3파일을 함수가 import 한다.
+lean-cli/
+lean-results/
+lean-results-old/
+lean-hyundai-results/
+lean-samsung/
+
+# ── 문서 — 말뭉치 `docs/*.md` 만 남긴다 ★ ──────────────────
+# `docs/spec/` 45개(2.2MB)는 런타임에 아무도 읽지 않는다. `docs/*.md` 9개(360KB)만
+# `routers/admin.py` 가 읽는다. 폴더를 통째로 빼면 그 기능이 죽는다.
+docs/*
+!docs/*.md
+
+# ── 런타임에 안 쓰는 것 ────────────────────────────────────
+image/
+reports/
+test/
+scripts/
+supabase/
+bi/
+data/
+node_modules/
+Dockerfile
+.dockerignore
+docker-compose*.yml
+docker-compose*.yaml
+lean_guide.md
+NOTICE.md
+README.md
+AGENTS.md
+CLAUDE.md
+세션-시작-프롬프트.md
+.DS_Store
+Thumbs.db
