@@ -217,23 +217,13 @@ def compose_answer(sources: list[dict[str, Any]]) -> str:
     return f"{ANSWER_HEAD}\n\n" + "\n\n".join(excerpts)
 
 
-def build_llm_prompt(query: str, sources: list[dict[str, Any]]) -> str:
-    """외부 AI 에게 보낼 프롬프트. 조립만 하고 부르지는 않는다 — 호출은 `clients/rag_llm.py`.
-
-    옛 `routers/rag.py:125~134` 와 같은 문장이다. 14,000자 절단도 그대로 뒀다.
-    """
-    context = "\n\n".join(
-        f"[출처 {index + 1}: {source.get('source_doc', '')} / 조각 "
-        f"{int(source.get('chunk_index', 0)) + 1}]\n{source.get('text', '')}"
-        for index, source in enumerate(sources)
-    )[:14000]
-    return (
-        "아래 '검색 원문'만 근거로 사용자의 질문에 한국어로 간결하게 답하세요. "
-        "원문에 없는 사실·숫자·투자 조언을 추가하지 말고, 정보가 부족하면 부족하다고 밝히세요. "
-        "출처 번호를 [출처 1]처럼 표시하고 3개 이내의 짧은 문단 또는 목록으로 정리하세요.\n\n"
-        f"사용자 질문: {query}\n\n검색 원문:\n{context}"
-    )
-
+# `build_llm_prompt()` 가 여기 있었습니다 — 2026-08-16 삭제.
+#
+# 외부 OpenAI 호환 모델에 보낼 프롬프트를 조립하던 함수이고, 유일한 소비자가
+# `clients/rag_llm.complete` 였습니다. 그 계층을 절대 제약 1("LLM 유료 API 비용 0원")
+# 때문에 걷어내면서 함께 지웠습니다. 남겨 두면 "부를 곳이 있다" 는 신호가 됩니다.
+#
+# 답변 조립은 `compose_answer()` 하나입니다 — 검색된 원문만 씁니다.
 
 # ── 후속 질문 (R-04 · CN-128) ────────────────────────────────────────────────
 #

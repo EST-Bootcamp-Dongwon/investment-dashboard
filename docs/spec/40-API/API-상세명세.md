@@ -190,7 +190,7 @@ R-04 가 요구한 AI 투자 도우미입니다. **세 엔드포인트 모두 Sw
 | `query` | str | O | — | `min_length=1, max_length=2000` (`rag.py:72`) | 응답에 에코 |
 | `top_k` | int | - | `5` | `ge=1, le=20` (`rag.py:73`) | Qdrant `limit` 으로 전달 |
 | `score_threshold` | float | - | `0.0` | `ge=0.0, le=1.0` (`rag.py:74`) | **0 보다 클 때만** payload 에 키 추가 (`rag.py:83~84`) |
-| `provider` | str | - | `"rag"` | `pattern ^(rag\|openai_compatible)$` (`rag.py:78`) | **`ask` 전용** |
+| ~~`provider`~~ | ~~str~~ | - | — | **필드 삭제 (2026-08-16)** — 절대 제약 1. 보내도 무시됩니다 | ~~**`ask` 전용**~~ |
 
 **임베딩 — `_hash_embed` (`rag.py:52~59`)**
 
@@ -247,12 +247,18 @@ R-04 가 요구한 AI 투자 도우미입니다. **세 엔드포인트 모두 Sw
 | `sources` | list | `search` 의 `results` 와 동일 구조. **원문 무삭제** |
 | `source_count` | int | `len(chunks)` |
 
-**`provider` 두 갈래**
+**~~`provider` 두 갈래~~ → 한 갈래**
+
+> ⚠ **2026-08-16: 외부 AI(`provider=openai_compatible`) 경로를 폐기했습니다.**
+> `RAG_LLM_*` 3종과 `clients/rag_llm.py` 가 함께 사라졌고, `provider` 필드 자체가
+> 요청 스키마에서 빠졌습니다(보내도 무시됩니다). 근거는 절대 제약 1 —
+> **LLM 유료 API 비용 0원**. 아래 표에 취소선이 그것입니다.
+> 자세한 경위는 [보안과-시크릿 §1.1](../60-운영/보안과-시크릿.md).
 
 | 값 | 동작 | 외부 호출 |
 | --- | --- | --- |
 | `rag` (기본) | `_rag_only_answer` (`rag.py:105~114`). **생성 모델 미사용.** 상위 **3개만** 순회(`rag.py:110`) → 공백 정규화 → **500자 컷 + `…`**(`rag.py:113`) → `• ` 불릿 | 0회 |
-| `openai_compatible` | `_openai_compatible_answer` (`rag.py:117~160`). 청크 **전부**를 이어붙여 **14,000자로 절단**(`rag.py:125~128`) 후 LLM 호출 | `POST {RAG_LLM_BASE_URL}/chat/completions`, `temperature 0.1`, `timeout=30` (`rag.py:143~150`) |
+| ~~`openai_compatible`~~ | **폐기 (2026-08-16)** — `_openai_compatible_answer`·`build_llm_prompt`·`clients/rag_llm.py` 모두 삭제 | ~~외부 호출~~ → **0회** |
 
 **프롬프트 원문** (`rag.py:129~134`)
 
@@ -274,10 +280,7 @@ system 메시지 (`rag.py:138`): "당신은 제공된 RAG 문서만 다듬어 �
 | --- | --- | --- |
 | 503 | Qdrant 미기동 | `rag.py:95~96` |
 | 503 | 컬렉션 미생성 (색인 명령 안내 포함) | `rag.py:97~102` |
-| 503 | `provider=openai_compatible` 인데 `RAG_LLM_API_KEY` 또는 `RAG_LLM_MODEL` 미설정 | `rag.py:122~123` |
 | 502 | Qdrant HTTP 에러 — **응답 본문 200자를 그대로 노출** | `rag.py:28~30` |
-| 502 | 외부 AI HTTP 에러 — **응답 본문 200자를 그대로 노출** | `rag.py:156~158` |
-| 502 | 외부 AI 타임아웃·파싱 실패·빈 응답 | `rag.py:153~154,159~160` |
 
 > ⚠ **502 두 건이 외부 시스템 응답 원문을 사용자에게 흘립니다.**
 > → [공통-응답과-에러 5.2절](공통-응답과-에러.md#52-외부-예외-원문을-detail-에-붙이는-19곳)
@@ -298,7 +301,7 @@ system 메시지 (`rag.py:138`): "당신은 제공된 RAG 문서만 다듬어 �
 | 조회 성공 | 위 4개 + `points_count` · `vector_size` · `status` |
 | 조회 예외 | 위 4개 + `error` (고정 문자열 "컬렉션이 없거나 조회 실패") |
 
-그 밖: `external_ai.openai_compatible_available` (bool) · `embed_method` (고정 `"hash"`).
+그 밖: `embed_method` (고정 `"hash"`). ~~`external_ai.openai_compatible_available`~~ 는 2026-08-16 에 응답에서 빠졌습니다.
 
 > `qdrant.url` 이 `_QDRANT_URL` 을 **그대로 노출**합니다 (`rag.py:16,204`).
 > 인증 없는 상태 조회라 내부 주소가 외부로 나갑니다.

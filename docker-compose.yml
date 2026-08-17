@@ -18,9 +18,13 @@ services:
     environment:
       QDRANT_URL: http://qdrant:6333
       QDRANT_COLLECTION: ${QDRANT_COLLECTION:-investment_docs}
-      RAG_LLM_BASE_URL: ${RAG_LLM_BASE_URL:-https://api.openai.com/v1}
-      RAG_LLM_API_KEY: ${RAG_LLM_API_KEY:-}
-      RAG_LLM_MODEL: ${RAG_LLM_MODEL:-}
+      # RAG_LLM_BASE_URL·RAG_LLM_API_KEY·RAG_LLM_MODEL 3줄을 지웠습니다 (2026-08-16).
+      # 기본값이 `https://api.openai.com/v1` 이라, 키만 꽂으면 유료 API 로 나가는
+      # 배선이 남아 있었습니다. **절대 제약 1 — LLM 유료 API 비용 0원**의 유일한
+      # 실물 위반 지점이었습니다.
+      #
+      # 파일(`clients/rag_llm.py`)만 지우면 되살아납니다. compose·`.env.example`·
+      # 라우터·화면을 같이 걷어야 완료입니다(05 검증본 P0-7).
       DART_API_KEY: ${DART_API_KEY:-}
       KOSIS_API_KEY: ${KOSIS_API_KEY:-}
       BOK_API_KEY: ${BOK_API_KEY:-}

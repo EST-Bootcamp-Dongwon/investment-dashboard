@@ -2,8 +2,11 @@
 
 **F03·F04·F05·F28 에 이어 3계층을 다섯 번째로 적용한 대상이다.** 이 파일은 경로 선언 ·
 요청 검증 · 도메인 예외를 HTTP 코드로 번역 · 응답 조립만 한다. 청킹·임베딩·답변 조립은
-`services/rag.py`, DB 접근은 `clients/doc_chunk_repo.py`, 외부 모델 호출은
-`clients/rag_llm.py` 에 있다.
+`services/rag.py`, DB 접근은 `clients/doc_chunk_repo.py` 에 있다.
+
+**외부 모델 호출 계층(`clients/rag_llm.py`)은 2026-08-16 에 없앴다.** 절대 제약 1이
+"LLM 유료 API 비용 0원" 이고, compose 기본값이 `https://api.openai.com/v1` 이라
+키만 꽂으면 과금이 시작되는 배선이었다. 답변은 이제 검색된 원문만 조립해 만든다.
 
 ## 앞의 넷과 다른 점 — **"저장 경로" 의 모양이 다르다**
 
@@ -57,10 +60,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 try:
-    from ..clients import doc_chunk_repo, rag_llm, supabase_client
+    from ..clients import doc_chunk_repo, supabase_client
     from ..services import rag as service
 except ImportError:  # `uvicorn main:app` 를 app/backend 에서 실행하는 경우
-    from clients import doc_chunk_repo, rag_llm, supabase_client  # type: ignore
+    from clients import doc_chunk_repo, supabase_client  # type: ignore
     from services import rag as service  # type: ignore
 
 router = APIRouter()
@@ -73,20 +76,24 @@ _NOT_INDEXED = (
 
 
 class RagAskRequest(BaseModel):
-    """옛 `RagSearchRequest` + `provider` 다. **제약값을 그대로 옮겼다.**
+    """옛 `RagSearchRequest` 다. **제약값을 그대로 옮겼다.**
 
     `/search` 를 지우면서 상속 관계가 없어졌을 뿐, 필드와 상·하한은 바뀌지 않았다
     (`query` 1~2000 · `top_k` 1~20 기본 5 · `score_threshold` 0~1 기본 0).
+
+    2026-08-16 에 `provider` 만 빠졌다 — 아래 주석 참고.
     """
 
     query: str = Field(min_length=1, max_length=2000, description="검색 질문")
     top_k: int = Field(default=5, ge=1, le=20, description="반환할 최대 청크 수")
     score_threshold: float = Field(default=0.0, ge=0.0, le=1.0, description="최소 유사도 점수")
-    provider: str = Field(
-        default="rag",
-        pattern="^(rag|openai_compatible)$",
-        description="답변 다듬기에 사용할 외부 AI 모듈",
-    )
+    # `provider` 필드를 없앴습니다 (2026-08-16). 값이 `rag|openai_compatible` 둘이었고
+    # 후자가 외부 유료 API 를 부르는 경로였습니다 — 절대 제약 1 위반이라 폐기했습니다.
+    #
+    # **호환을 위해 남기지 않았습니다.** pydantic 은 모르는 필드를 조용히 무시하므로,
+    # 옛 화면이 `provider: "openai_compatible"` 을 계속 보내도 422 가 아니라 그냥
+    # RAG 답변이 나갑니다. 필드를 남겨 두면 "선택할 수 있다" 는 신호가 스키마에
+    # 남아 다음 사람이 배선을 되살립니다.
 
 
 def _search(req: RagAskRequest) -> tuple[list[dict], list[dict]]:
@@ -138,28 +145,20 @@ def _assert_indexed() -> None:
 
 @router.post("/api/rag/ask")
 def rag_ask(req: RagAskRequest) -> dict[str, object]:
-    """학습 문서에서 근거를 찾아 답하고, 선택 시 외부 AI 로 문장만 다듬습니다."""
+    """학습 문서에서 근거를 찾아, **검색된 원문만 조립해** 답합니다."""
     sources, pool = _search(req)
     if not sources:
         _assert_indexed()
 
-    if req.provider == "rag" or not sources:
-        # 근거가 0건이면 외부 모델을 부르지 않는다. 다듬을 원문이 없는데 부르면
-        # 모델이 자기 지식으로 투자 이야기를 지어내고, 그것이 R-07 이 막으려는 바로
-        # 그 상황이다 — 옛 구현은 빈 컨텍스트로도 호출했다.
-        answer = service.compose_answer(sources)
-    else:
-        try:
-            answer = rag_llm.complete(service.build_llm_prompt(req.query, sources))
-        except rag_llm.RagLlmNotConfigured as exc:
-            raise HTTPException(status_code=503, detail=str(exc)) from exc
-        except rag_llm.RagLlmError as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
+    # **답변은 검색된 원문만 조립해 만듭니다.** 외부 모델 분기가 여기 있었고
+    # 2026-08-16 에 걷어냈습니다(절대 제약 1). 걷어내면서 R-07 이 강해졌습니다 —
+    # 옛 분기는 "근거가 0건이면 외부 모델을 부르지 않는다" 는 **조건**으로 환각을
+    # 막았는데, 이제는 부를 모델 자체가 없어 조건이 필요 없습니다.
+    answer = service.compose_answer(sources)
 
     return {
         "query": req.query,
         "answer": answer,
-        "provider": req.provider,
         # 하드코딩이 아니라 서비스 상수를 읽는다. 옛 구현은 문자열 'hash' 를 세 곳에
         # 박아 두어(`rag.py:168,181,206`) 임베딩을 바꾸면 응답이 거짓이 됐다.
         "embed_method": service.EMBED_METHOD,
@@ -169,8 +168,8 @@ def rag_ask(req: RagAskRequest) -> dict[str, object]:
         "disclaimer_context": service.DISCLAIMER_CONTEXT,
         # 후속 질문은 **답변이 아니라 메타데이터**다. `answer` 는 원문 전용으로 두고
         # 규칙 계산 결과를 별개 필드로 내보내면, "이 문장은 원문에서 왔는가" 의 경계가
-        # 타입 수준에서 갈린다. 계산이 provider 분기 **밖**이라 두 갈래가 같은 함수·
-        # 같은 입력을 타고, 모드에 따라 화면이 달라질 구조적 여지가 없다 (R-04 · CN-128).
+        # 타입 수준에서 갈린다. 옛 `provider` 분기 **밖**에서 계산하도록 짜 두었기에,
+        # 그 분기를 걷어낸 지금도 이 자리가 그대로다 (R-04 · CN-128).
         #
         # 넘기는 것은 `sources`(top_k) 가 아니라 `pool`(최대 FOLLOWUP_POOL) 이다 —
         # 좁은 쪽을 주면 관문을 통과하는 후보가 크게 줄어든다 (CN-128 의 표).
@@ -215,7 +214,6 @@ def rag_status() -> dict[str, object]:
             "document_count": len(documents),
             "documents": documents,
         },
-        "external_ai": {"openai_compatible_available": rag_llm.is_configured()},
         "embed_method": service.EMBED_METHOD,
         "disclaimer": service.DISCLAIMER,
         "disclaimer_context": service.DISCLAIMER_CONTEXT,

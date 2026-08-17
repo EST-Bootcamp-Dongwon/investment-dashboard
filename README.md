@@ -123,7 +123,6 @@ ML/DL 실습 화면을 쓰지 않는다면 해당 줄을 지우고 설치해도 
 | --- | --- | --- |
 | `QDRANT_URL` | 문서 검색 | RAG API 가 `503` |
 | `QDRANT_COLLECTION` | 문서 검색 | 색인 명령과 같은 값을 유지해야 합니다 |
-| `RAG_LLM_BASE_URL` / `RAG_LLM_API_KEY` / `RAG_LLM_MODEL` | RAG 답변 문장 다듬기 | 세 값이 모두 있어야 외부 AI 선택 UI 가 켜집니다 |
 | `DART_API_KEY` | 기업·공시 분석 | DART 관련 API 가 `503` |
 | `DIFFUSERS_MODEL_ID` | 텍스트-이미지 생성 | 기본 모델을 사용합니다 |
 

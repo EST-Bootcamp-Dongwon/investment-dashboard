@@ -31,8 +31,10 @@ Auth 사용자 2명(관리자 1 · 비관리자 1)을 만들고 끝에서 지운
     .venv/bin/python scripts/verify_rag_api.py
 
 저장소 루트의 `.env` 에서 `SUPABASE_URL`·`SUPABASE_SERVICE_ROLE_KEY` 를 읽는다.
-외부 AI(`RAG_LLM_*`)는 필요 없다 — `clients/rag_llm.complete` 를 가짜로 바꿔
-`provider='openai_compatible'` 경로를 네트워크 없이 밟는다.
+외부 AI 는 **더 이상 존재하지 않는다.** 2026-08-16 에 `clients/rag_llm.py` 와
+`provider` 필드를 걷어냈다(절대 제약 1 — LLM 유료 API 비용 0원). 그래서 이 검사에서
+경계를 치환하던 절(`rag_llm.complete` 를 가짜로 바꾸던 자리)도 함께 없앴고, 대신
+**되살아나지 않는지를 보는 검사 3건**을 넣었다 — 아래 ③ 절 끝.
 """
 
 from __future__ import annotations
@@ -68,7 +70,7 @@ load_dotenv(ROOT / ".env")
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 
-from clients import doc_chunk_repo, rag_llm, supabase_client  # noqa: E402
+from clients import doc_chunk_repo, supabase_client  # noqa: E402
 from routers.admin import router as admin_router  # noqa: E402
 from routers.rag import router as rag_router  # noqa: E402
 from services import rag as service  # noqa: E402
@@ -292,8 +294,11 @@ def verify_runtime() -> None:
     response = client.post("/api/rag/ask", json={"query": "분산투자", "top_k": 3})
     body = response.json()
     check("③ ask 200", "POST /api/rag/ask", 200, response.status_code)
+    # `provider` 가 2026-08-16 에 빠졌다 — 외부 AI 폐기(절대 제약 1). 응답에 되돌아오면
+    # 이 집합 비교가 곧바로 걸린다. **키 집합을 통째로 비교하는 이유가 이것이다** —
+    # 개별 키를 하나씩 보면 새로 *생긴* 키를 아무도 못 잡는다.
     check("③ 응답 키 집합", "ask", {
-        "query", "answer", "provider", "embed_method", "sources", "source_count",
+        "query", "answer", "embed_method", "sources", "source_count",
         "disclaimer", "disclaimer_context", "followups", "followups_head",
     }, set(body))
     check("③ embed_method 가 하드코딩이 아니다", "ask.embed_method", service.EMBED_METHOD,
@@ -358,47 +363,33 @@ def verify_runtime() -> None:
     # 근거가 0건이면 제안도 0개다. 근거 없이 질문을 붙이면 ANSWER_EMPTY 와 모순된다.
     check("③ 근거 0건이면 followups 도 0개", "ask.followups", [], high.json()["followups"])
 
-    # ── 외부 AI 경로 — 네트워크 없이 경계를 치환해서 밟는다 ────────────────────
-    original = rag_llm.complete
-    seen: dict[str, str] = {}
-
-    def fake_complete(prompt: str) -> str:
-        seen["prompt"] = prompt
-        return "가짜 외부 AI 답변"
-
-    rag_llm.complete = fake_complete  # type: ignore[assignment]
-    try:
-        response = client.post(
-            "/api/rag/ask", json={"query": "분산투자", "top_k": 2, "provider": "openai_compatible"}
-        )
-        body = response.json()
-        check("③ 외부 AI 경로 200", "POST /api/rag/ask", 200, response.status_code)
-        check("③ 외부 AI 답변이 그대로 나온다", "ask.answer", "가짜 외부 AI 답변", body["answer"])
-        check("③ 외부 AI 에도 면책이 붙는다", "ask.disclaimer", service.DISCLAIMER, body["disclaimer"])
-        # **모드 무관성** — 후속 질문 계산이 provider 분기 밖에 있으므로 두 갈래가
-        # 같은 값을 내야 한다. 갈리면 화면이 모드에 따라 다른 말을 하게 된다 (CN-128).
-        plain = client.post("/api/rag/ask", json={"query": "분산투자", "top_k": 2}).json()
-        check("③ 두 provider 의 followups 가 같다", "ask.followups", plain["followups"],
-              body["followups"])
-        check("③ 외부 AI 답변에도 followups 가 붙는다", "ask.followups", True,
-              "followups" in body)
-        check("③ 프롬프트에 출처가 들어간다", "build_llm_prompt", True,
-              "[출처 1:" in seen.get("prompt", ""))
-        # 근거가 0건이면 외부 모델을 부르지 않는다 — 지어내기를 막는 자리다.
-        seen.clear()
-        client.post("/api/rag/ask", json={
-            "query": "분산투자", "top_k": 2, "score_threshold": 0.99, "provider": "openai_compatible"
-        })
-        check("③ 근거 0건이면 외부 AI 를 부르지 않는다", "rag_llm.complete", False, "prompt" in seen)
-    finally:
-        rag_llm.complete = original  # type: ignore[assignment]
+    # ── 외부 AI 가 되살아나지 않는지 ─────────────────────────────────────────
+    #
+    # 여기에 "외부 AI 경로" 검사 8건이 있었다. `clients/rag_llm.complete` 를 가짜로
+    # 바꿔 `provider='openai_compatible'` 을 네트워크 없이 밟는 방식이었다.
+    # **그 경로를 2026-08-16 에 폐기했다** — compose 기본값이 `https://api.openai.com/v1`
+    # 이라 키만 꽂으면 과금이 시작되는 배선이었고, 절대 제약 1 이 그것을 금지한다.
+    #
+    # 지운 자리를 비워 두지 않는다. 폐기는 **한 번 지우는 일이 아니라 계속 지워져
+    # 있어야 하는 상태**이고, 지켜지는지 보는 것이 이 파일의 일이다.
+    # (05 검증본 P0-7: *"파일만 지우면 안 된다. 다음 사람이 키를 꽂는 순간 되살아난다."*)
+    check("③ 외부 AI 모듈이 없다", "clients/rag_llm.py", False,
+          (ROOT / "app" / "backend" / "clients" / "rag_llm.py").exists())
+    check("③ 응답에 external_ai 가 없다", "GET /api/rag/status", False,
+          "external_ai" in client.get("/api/rag/status").json())
+    # `provider` 를 보내도 **422 가 아니라 무시**된다. pydantic 이 모르는 필드를
+    # 조용히 버리기 때문이다. 옛 화면이 남아 있어도 RAG 답변이 그대로 나간다.
+    revived = client.post("/api/rag/ask", json={"query": "분산투자", "top_k": 2,
+                                                "provider": "openai_compatible"})
+    check("③ 옛 provider 를 보내도 200", "POST /api/rag/ask", 200, revived.status_code)
+    check("③ 옛 provider 를 보내도 RAG 답변", "ask.answer",
+          client.post("/api/rag/ask", json={"query": "분산투자", "top_k": 2}).json()["answer"],
+          revived.json()["answer"])
 
     # ── 입력 검증 ────────────────────────────────────────────────────────────
     check("③ 빈 질문은 422", "POST /api/rag/ask", 422, client.post("/api/rag/ask", json={"query": ""}).status_code)
     check("③ top_k 상한 초과는 422", "POST /api/rag/ask", 422,
           client.post("/api/rag/ask", json={"query": "x", "top_k": 21}).status_code)
-    check("③ provider 값이 아니면 422", "POST /api/rag/ask", 422,
-          client.post("/api/rag/ask", json={"query": "x", "provider": "gemini"}).status_code)
     check("③ 삭제된 /search 는 404", "POST /api/rag/search", 404,
           client.post("/api/rag/search", json={"query": "x"}).status_code)
 
