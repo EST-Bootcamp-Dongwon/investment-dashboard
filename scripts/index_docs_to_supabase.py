@@ -60,7 +60,8 @@ from clients import doc_chunk_repo, supabase_client  # noqa: E402
 from services import rag as service  # noqa: E402
 
 # `glob("*.md")` 는 비재귀다. `docs/spec/` 45개는 색인에서 빠진다 — 의도된 제외이고,
-# 말뭉치는 투자 상식 문서이지 명세서가 아니다.
+# 말뭉치는 투자 상식 문서이지 명세서가 아니다. 같은 이유로 `docs/README.md`(문서 지도)도
+# 빠지는데, 그쪽은 비재귀 glob 이 못 걸러서 `service.is_corpus_doc` 이 판정한다.
 DOCS_DIR = Path(os.getenv("DOCS_DIR") or (ROOT / "docs"))
 
 
@@ -74,7 +75,7 @@ def main() -> int:
         print(f"[ERROR] 문서 폴더가 없습니다: {DOCS_DIR}")
         return 1
 
-    files = sorted(DOCS_DIR.glob("*.md"))
+    files = sorted(path for path in DOCS_DIR.glob("*.md") if service.is_corpus_doc(path.name))
     if args.doc:
         files = [path for path in files if path.name == args.doc]
         if not files:

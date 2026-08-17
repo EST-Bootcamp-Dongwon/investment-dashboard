@@ -61,6 +61,10 @@ _DEFAULT_DOCS_DIR = Path(__file__).resolve().parents[3] / "docs"
 
 # `glob("*.md")` 는 **비재귀다.** `docs/spec/` 하위 45개 문서는 색인에서 빠진다.
 # 의도된 제외다 — 말뭉치는 투자 상식 문서이고 명세서가 아니다 (`docs/spec/README.md`).
+#
+# 비재귀 glob 이 걸러 내지 못하는 것이 하나 더 있다 — `docs/README.md`(문서 지도).
+# 그 판정은 `services/rag.is_corpus_doc` 이 한다. 여기에 이름을 적지 않는 이유는
+# 같은 규칙이 색인 스크립트·검증 스크립트에도 필요하기 때문이다.
 _DOC_GLOB = "*.md"
 
 
@@ -73,7 +77,11 @@ def _source_files() -> dict[str, Path]:
     directory = _docs_dir()
     if not directory.is_dir():
         return {}
-    return {path.name: path for path in sorted(directory.glob(_DOC_GLOB))}
+    return {
+        path.name: path
+        for path in sorted(directory.glob(_DOC_GLOB))
+        if service.is_corpus_doc(path.name)
+    }
 
 
 class ReindexRequest(BaseModel):

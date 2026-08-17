@@ -84,6 +84,18 @@ client = TestClient(app, raise_server_exceptions=False)
 VERIFY_DOC = "__verify__rag.md"
 VERIFY_ORPHAN = "__verify__orphan.md"
 
+
+def _corpus_paths() -> list[Path]:
+    """말뭉치 파일 목록. 판정은 `services/rag.is_corpus_doc` 이 한다.
+
+    **이 스크립트가 자기 규칙을 갖지 않는 것이 요점이다.** 검증하는 쪽이 판정
+    규칙을 따로 들고 있으면, 색인 쪽 규칙이 바뀌어도 검증은 옛 규칙으로 통과한다 —
+    검증이 아니라 자기 자신과의 대조가 된다.
+    """
+    return sorted(
+        path for path in (ROOT / "docs").glob("*.md") if service.is_corpus_doc(path.name)
+    )
+
 # 연결이 즉시 거부되는 주소. 타임아웃 10초를 기다리지 않고 503 경로를 밟는다.
 DEAD_URL = "http://127.0.0.1:1"
 BAD_TOKEN = "not-a-real-access-token"
@@ -185,7 +197,7 @@ def load_legacy_functions() -> dict:
 
 def verify_port() -> None:
     legacy = load_legacy_functions()
-    docs = sorted((ROOT / "docs").glob("*.md"))
+    docs = _corpus_paths()
 
     total_chunks = 0
     chunk_mismatch = 0
@@ -554,7 +566,7 @@ def cleanup() -> None:
 def _corpus_sources() -> list[dict]:
     """말뭉치 전체를 `to_source()` 모양의 청크 리스트로 만든다."""
     out: list[dict] = []
-    for path in sorted((ROOT / "docs").glob("*.md")):
+    for path in _corpus_paths():
         for index, chunk in enumerate(service.chunk_text(path.read_text(encoding="utf-8"))):
             out.append({
                 "score": 0.0, "source_doc": path.name, "chunk_index": index, "text": chunk,
