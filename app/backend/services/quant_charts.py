@@ -92,9 +92,26 @@ def _data_url(plt: Any, fig: Any) -> str:
 
 
 def backtest(*, fast_ma: int, slow_ma: int, n_days: int) -> dict[str, object]:
-    """MA 크로스오버 전략 백테스트. `routers/quant.py:106~228` 그대로다."""
-    plt = charting.require_matplotlib()
-    import matplotlib.gridspec as gridspec
+    """MA 크로스오버 전략 백테스트.
+
+    ## 서버 렌더 PNG 에서 시리즈로 (2026-08-17)
+
+    **`matplotlib` 을 부르지 않는 첫 차트 함수다.** 계산은 한 줄도 바뀌지 않았다 —
+    바꾼 것은 **결과를 무엇으로 내보내는가** 뿐이다. 그림 대신 숫자를 주고,
+    `js/views/backtest.js` 가 ApexCharts 로 그린다(ADR-DB-0002 · 계약 §8.6).
+
+    | | 전 | 후 |
+    | --- | --- | --- |
+    | 응답 | `image` = PNG data URI **260 KB** | `series` = 숫자 **약 90 KB** |
+    | 배포본 | matplotlib 이 없어 **503** | **200** — 이 화면이 배포본에서 살아난다 |
+    | 상호작용 | 없음(그림) | 줌·팬·툴팁 |
+
+    계약 §8.6 의 판정 기준 그대로다 — *"사용자가 상호작용해야 하는가"*. 에쿼티
+    커브를 구간별로 확대해 보는 것은 그림으로 안 된다.
+
+    **`plt.close()` 를 빠뜨릴 걱정도 함께 사라졌다.** 4.5MB 응답 본문 한도
+    (배포-전략 1.1절)에서도 260 KB → 90 KB 만큼 멀어진다.
+    """
     import numpy as np
     import pandas as pd
 
@@ -137,74 +154,37 @@ def backtest(*, fast_ma: int, slow_ma: int, n_days: int) -> dict[str, object]:
     total_ret = float(cum.iloc[-1] - 1)
     bh_ret = float(df["BH_Cum"].iloc[-1] - 1)
 
-    fig = plt.figure(figsize=(14, 9), facecolor=BACKGROUND)
-    gs = gridspec.GridSpec(3, 2, figure=fig, hspace=0.45, wspace=0.3)
-    text_c = TEXT
-    grid_c = GRID
+    # 매수·매도 시점. 원본의 `ax1.scatter` 두 줄이 쓰던 마스크 그대로다.
+    buy_mask = (df["Position"] == 1) & (df["Position"].shift(1) == 0)
+    sell_mask = (df["Position"] == 0) & (df["Position"].shift(1) == 1)
 
-    # 원본 그대로다 — 서브플롯 6개를 만들고 곧바로 지운다. 아래에서 다시 만들므로
-    # 그림에 남는 것은 없다. 지우면 결과가 같을 것으로 보이나 확인 없이 건드리지 않았다.
-    for ax in [fig.add_subplot(gs[r, c]) for r in range(3) for c in range(2)]:
-        ax.set_facecolor(PANEL)
-    plt.clf()
+    dates = [stamp.strftime("%Y-%m-%d") for stamp in df.index]
 
-    ax1 = fig.add_subplot(gs[0, :])
-    ax1.set_facecolor(PANEL)
-    ax1.plot(df.index, df["Close"], color="#64748b", lw=0.8, label="주가")
-    ax1.plot(df.index, df["MA_fast"], color="#3b82f6", lw=1.5, label=f"MA{fast_ma}")
-    ax1.plot(df.index, df["MA_slow"], color="#f97316", lw=1.5, label=f"MA{slow_ma}")
-    buy_m = (df["Position"] == 1) & (df["Position"].shift(1) == 0)
-    sell_m = (df["Position"] == 0) & (df["Position"].shift(1) == 1)
-    ax1.scatter(df.index[buy_m], df["Close"][buy_m], marker="^", color="#22c55e", s=50, zorder=5, label="매수")
-    ax1.scatter(df.index[sell_m], df["Close"][sell_m], marker="v", color="#ef4444", s=50, zorder=5, label="매도")
-    ax1.set_title(f"MA 크로스오버 전략 (MA{fast_ma}/MA{slow_ma})", color=text_c, fontsize=11, fontweight="bold")
-    ax1.legend(fontsize=8, ncol=5, labelcolor=text_c, facecolor=BACKGROUND)
-    ax1.tick_params(colors=text_c); ax1.spines[:].set_color(grid_c)
-    ax1.grid(True, alpha=0.2, color=grid_c)
+    def _points(mask) -> list[dict[str, object]]:
+        picked = df.loc[mask, "Close"]
+        return [
+            {"date": stamp.strftime("%Y-%m-%d"), "price": round(float(price), 2)}
+            for stamp, price in picked.items()
+        ]
 
-    ax2 = fig.add_subplot(gs[1, :])
-    ax2.set_facecolor(PANEL)
-    ax2.plot(df.index, df["Strat_Cum"], color="#3b82f6", lw=2, label=f"전략 ({total_ret:+.1%})")
-    ax2.plot(df.index, df["BH_Cum"], color="#94a3b8", lw=2, ls="--", label=f"Buy & Hold ({bh_ret:+.1%})")
-    ax2.axhline(1.0, color="#475569", lw=0.6)
-    ax2.set_title("누적 수익률 비교", color=text_c, fontsize=11)
-    ax2.legend(fontsize=9, labelcolor=text_c, facecolor=BACKGROUND)
-    ax2.tick_params(colors=text_c); ax2.spines[:].set_color(grid_c)
-    ax2.grid(True, alpha=0.2, color=grid_c)
-
-    ax3 = fig.add_subplot(gs[2, 0])
-    ax3.set_facecolor(PANEL)
-    ax3.fill_between(df.index, dd * 100, 0, color="#ef4444", alpha=0.5)
-    ax3.set_title("낙폭 Drawdown (%)", color=text_c, fontsize=11)
-    ax3.tick_params(colors=text_c); ax3.spines[:].set_color(grid_c)
-    ax3.grid(True, alpha=0.2, color=grid_c)
-
-    ax4 = fig.add_subplot(gs[2, 1])
-    ax4.set_facecolor(PANEL)
-    ax4.axis("off")
-    rows = [
-        ["전략 총수익률", f"{total_ret:+.1%}"],
-        ["B&H 수익률", f"{bh_ret:+.1%}"],
-        ["CAGR", f"{cagr:+.2%}"],
-        ["Sharpe", f"{sharpe:.2f}"],
-        ["MDD", f"{mdd:.1%}"],
-        ["승률", f"{win_rate:.1%}"],
-        ["손익비", f"{pf:.2f}"],
-        ["거래횟수", f"{n_trades}회"],
-    ]
-    tbl = ax4.table(cellText=rows, colLabels=["지표", "값"], loc="center", bbox=[0, 0, 1, 1])
-    tbl.auto_set_font_size(False); tbl.set_fontsize(9)
-    for (r, c), cell in tbl.get_celld().items():
-        cell.set_facecolor(BACKGROUND if r == 0 else PANEL)
-        cell.set_text_props(color=text_c)
-        cell.set_edgecolor(grid_c)
-    ax4.set_title("성과 요약", color=text_c, fontsize=11)
-
-    fig.patch.set_facecolor(BACKGROUND)
-    plt.suptitle("백테스트 결과 — MA 크로스오버 전략", color=text_c, fontsize=13, fontweight="bold", y=1.01)
+    # 소수 자리를 여기서 자른다. 1,260일 × 6계열이면 자르지 않을 때 float 반복소수가
+    # 그대로 실려 본문이 3배가 된다. 화면이 쓰는 정밀도는 이것으로 충분하다.
+    def _round(series, digits: int) -> list[float]:
+        return [round(float(value), digits) for value in series]
 
     return {
-        "image": _data_url(plt, fig),
+        "series": {
+            "dates": dates,
+            "close": _round(df["Close"], 2),
+            "ma_fast": _round(df["MA_fast"], 2),
+            "ma_slow": _round(df["MA_slow"], 2),
+            "strategy_cum": _round(df["Strat_Cum"], 4),
+            "buyhold_cum": _round(df["BH_Cum"], 4),
+            "drawdown_pct": _round(dd * 100, 2),
+            "buy_points": _points(buy_mask),
+            "sell_points": _points(sell_mask),
+        },
+        "params": {"fast_ma": fast_ma, "slow_ma": slow_ma, "n_days": n_days},
         "metrics": {"cagr": round(cagr, 4), "sharpe": round(sharpe, 2), "mdd": round(mdd, 4),
                     "win_rate": round(win_rate, 4), "profit_factor": round(pf, 2),
                     "n_trades": n_trades, "total_return": round(total_ret, 4), "bh_return": round(bh_ret, 4)},
