@@ -40,6 +40,7 @@ CHECKS=(
   "F|check_layers.py|0 2|off|계층 규칙 (아키텍처 5절 6개 명령)"
   "H|check_routes.py|0|off|라우트 68개 보존 (CN-065 분해 안전망)"
   "-|check_deploy_config.py|0|off|배포 설정 4종 정합 (배포-전략 7절 점검표)"
+  "-|check_frontend_syntax.py|0|off|프런트 JS ESM 파싱 (2026-08-17 SPA 사흘 사망)"
   "B|verify_dart_scoring.py|0|off|DART 재무 비율·점수"
   "C|verify_walkforward.py|0|off|hd_core 워크포워드"
   "A|verify_recommendation_rule.py|0|off|F03 판정 규칙 27조합"

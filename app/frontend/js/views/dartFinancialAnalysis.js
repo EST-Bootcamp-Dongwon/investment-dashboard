@@ -237,9 +237,15 @@ function renderAnalysis(data, container) {
             ${esc(outlook_reason)}
           </p>
           <!-- 면책을 배지 바로 아래로 올린다. 서버가 같은 문장을 응답에도 실어
-               보내므로(main.py `analysis.disclaimer`) 화면을 거치지 않는 경로도
+               보내므로(main.py 의 analysis.disclaimer) 화면을 거치지 않는 경로도
                덮인다. context 는 서버가 준 것을 그대로 쓴다 — 프런트 상수와
-               갈라지는지는 verify_dart_outlook.py 가 대조한다. -->
+               갈라지는지는 verify_dart_outlook.py 가 대조한다.
+
+               ⚠️ 이 주석은 **템플릿 리터럴 안**이다. 백틱을 쓰면 템플릿이 거기서
+               닫히고 뒤가 코드로 파싱된다. 2026-08-14~17 사흘 동안 analysis.disclaimer
+               를 백틱으로 감싼 탓에 이 모듈이 파싱에 실패했고, app.js 의 import 사슬이
+               끊겨 SPA 전체가 죽어 있었다(window.navigate 조차 정의되지 않았다).
+               파이썬 검사 15벌은 전부 통과했다 — 그래서 check_frontend_syntax.py 를 뒀다. -->
           ${disclaimer('strong', { context: analysis.disclaimer_context || '' })}
         </div>
 
@@ -271,7 +277,7 @@ function renderAnalysis(data, container) {
             <p style="font-size:0.85rem; color:#cbd5e1; margin:0; line-height:1.7;">${esc(p)}</p>
           </div>`).join('')}
       </div>
-      <!-- 여기 있던 `※ 면책` 한 줄은 없앴다. 같은 문장이 위 재무 상태 칸에 strong 으로
+      <!-- 여기 있던 "※ 면책" 한 줄은 없앴다. 같은 문장이 위 재무 상태 칸에 strong 으로
            붙었고, 화면-상세.md 4.2절 5번이 "배지 바로 아래" 를 지정했다. 맨 아래
            작은 글씨로 한 번 더 쓰면 원래 문제(배지는 크고 면책은 작다)가 남는다. -->
     </div>
