@@ -4,7 +4,7 @@
 > `investment-portfolio-site` 시절 내용이라 덮어쓰지 않았다.
 > 승격이 확정되면 이 내용을 루트 `README.md`로 올리고 기존 내용을 흡수하세요.
 
-> ①을 **개명 승격**한 팀 공용 경량 프론트엔드 + BI 산출물 (2026-08-16, `git mv`).
+> ①을 **개명 승격**한 포트폴리오·리스크 분석 대시보드 + BI 산출물 (2026-08-16, `git mv`).
 > 복사본이 아니라 같은 저장소이고 히스토리가 이어진다.
 > 신규 개발이 아니라 **데이터 계층 교체**가 핵심이다.
 
@@ -49,8 +49,8 @@
 | `app/backend/main.py` · `charting.py` · `routers/` · `openapi_docs.py` | **여기 남는다** | — |
 | `app/backend/indicators.py` | `quant-core/indicators/` | 2차 |
 | `app/backend/services/backtest.py` · `combination.py` · `recommendation.py` | `backtest-service/` | 2차 |
-| `app/backend/services/simulation.py` | `portfolio-service/` | 3차 |
-| `app/src/PortfolioOptimizer.py` · `RiskManager.py` | `portfolio-service/` | 3차 |
+| `app/backend/services/simulation.py` | **여기 남는다** | — |
+| `app/src/PortfolioOptimizer.py` · `RiskManager.py` | **여기 남는다** | — |
 | `app/src/Backtest.py` | `backtest-service/` | 2차 |
 | `app/src/OpenCVCPU.py` | **폐기** | 지금 |
 | `app/backend/services/rag.py`(해시 임베딩) · `clients/rag_llm.py`(유료 LLM) | **폐기** | 지금 |
