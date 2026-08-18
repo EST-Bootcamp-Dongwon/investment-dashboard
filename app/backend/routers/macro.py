@@ -13,7 +13,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 try:
     from ..services import macro as service
@@ -34,8 +34,10 @@ class MacroKospiExRequest(BaseModel):
 
 
 class MacroSimRequest(BaseModel):
-    n_days:    int   = 252
-    seed:      int   = 42
+    # `seed` 는 하한이 없으면 음수가 들어와 `np.random.default_rng` 가 500 을 낸다.
+    # 422 가 사실에 맞는 응답이다 (2026-08-17).
+    n_days:    int   = Field(252, ge=60, le=1260)
+    seed:      int   = Field(42, ge=0)
 
 
 @router.post("/api/macro/realtime")

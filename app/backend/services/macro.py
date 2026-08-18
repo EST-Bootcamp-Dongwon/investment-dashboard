@@ -493,17 +493,45 @@ def macro_kospi_ex_meta() -> dict[str, object]:
 
 
 def macro_simulation(*, n_days: int, seed: int) -> dict[str, object]:
-    plt = charting.require_matplotlib()
-    import matplotlib.gridspec as gridspec
-    import numpy as np
-    import io, base64
+    """거시경제 GBM 시뮬레이션 대시보드 (지표 6종).
 
-    DARK   = "#0f172a"
-    SURF   = "#1e293b"
-    BORDER = "#334155"
-    TEXT   = "#e2e8f0"
-    MUTED  = "#64748b"
-    COLORS = ["#3b82f6","#f59e0b","#ef4444","#22c55e","#a855f7","#06b6d4"]
+    ## 서버 렌더 PNG 에서 시리즈로 (2026-08-17)
+
+    세 번째다(backtest · risk 에 이어). **계산은 한 줄도 바뀌지 않았다** — `gbm()`,
+    국면 배수, 지표 여섯의 `s0`·`mu`·`sigma` 전부 그대로다.
+
+    ## 이전하면서 사라지는 500 두 가지
+
+    원본은 `ax.plot(days, vals)` 를 불렀는데 **두 배열의 길이가 어긋날 수 있었다.**
+    `phase_len = T // 4` 라서 네 국면의 합은 `4 * (T // 4)` 이고, `T` 가 4의 배수가
+    아니면 `vals` 가 `days` 보다 짧다. 실측:
+
+    | `n_days` | `vals` | `days` | |
+    | --- | --- | --- | --- |
+    | 252 (기본) | 252 | 252 | 200 |
+    | 253 | 252 | 253 | **500** |
+    | 250 | 248 | 250 | **500** |
+
+    화면의 입력이 `type="number"` 자유 입력이라 **[60,1260] 중 4의 배수가 아닌
+    75% 가 그대로 500 이었다.** 그림을 그리지 않으니 이 오류가 사라지고, 길이는
+    `series.points` **하나로 통일**한다 — 화면·축·국면 경계가 모두 이 값을 쓴다.
+
+    `seed` 음수도 500 이었다(`np.random.default_rng` 가 거부한다). 라우터에
+    `ge=0` 을 붙여 422 로 바꾼다 — 그쪽이 사실에 맞는 응답이다.
+
+    ## 소수 자리 — 일괄 2자리로 자르면 선이 계단이 된다
+
+    이전 규칙은 "비율 4자리·가격 2자리" 지만, **반올림 단위가 일일 변동폭과 같은
+    크기면 층이 보인다.** 기준금리는 `s0=3.50` 에 일일 이동 중앙값이 약 0.011 이라
+    2자리(0.01)로 자르면 인접 중복이 297/1259 개 생긴다. 그래서 지표마다
+    표시 자릿수 `decimals` 에 **+2** 해서 저장한다. 늘어나는 본문은 약 6 KB 다.
+
+    ## 색을 응답에 싣지 않는다
+
+    계열 색과 국면 색은 **화면의 관심사**다(D-11). 순서가 곧 색이 되도록
+    지표 배열 순서만 유지하고, 팔레트는 `js/views/macroSimulation.js` 가 들고 있다.
+    """
+    import numpy as np
 
     rng = np.random.default_rng(seed)
     T   = max(60, min(n_days, 1260))
@@ -541,75 +569,49 @@ def macro_simulation(*, n_days: int, seed: int) -> dict[str, object]:
                 break
         series_dict[name] = np.array(vals[:T])
 
-    days = np.arange(T)
+    # 실제로 채워진 길이가 정본이다. `T` 가 아니다 — 위 표의 500 이 여기서 났다.
+    points = min(len(v) for v in series_dict.values())
 
-    # ── Figure ────────────────────────────────────────────────────────────────
-    fig = plt.figure(figsize=(14, 12), facecolor=DARK)
-    gs  = gridspec.GridSpec(3, 2, figure=fig, hspace=0.45, wspace=0.35,
-                            left=0.08, right=0.97, top=0.93, bottom=0.05)
+    def _decimals(fmt: str) -> int:
+        """`".2f"` → 2. 표시 자릿수다."""
+        return int(fmt[1])
 
-    names_list = list(series_dict.keys())
-    for idx, (name, vals) in enumerate(series_dict.items()):
-        row, col = divmod(idx, 2)
-        ax = fig.add_subplot(gs[row, col])
-        ax.set_facecolor(SURF)
-        color = COLORS[idx]
-        cfg   = indicators[name]
+    out_indicators = []
+    for name, vals in series_dict.items():
+        cfg = indicators[name]
+        d = _decimals(cfg["fmt"])
+        # 표시 자릿수 +2 로 저장한다. 그대로 자르면 3.5 스케일 계열이 계단이 된다.
+        keep = d + 2
+        hi, lo = int(np.argmax(vals)), int(np.argmin(vals))
+        out_indicators.append({
+            "name": name,
+            "decimals": d,
+            "values": [round(float(v), keep) for v in vals[:points]],
+            "start": round(float(vals[0]), keep),
+            "end": round(float(vals[points - 1]), keep),
+            "chg_pct": round(float(vals[points - 1] / vals[0] - 1) * 100, 2),
+            "high": {"index": hi, "value": round(float(vals[hi]), keep)},
+            "low": {"index": lo, "value": round(float(vals[lo]), keep)},
+        })
 
-        ax.plot(days, vals, color=color, lw=1.5)
-        ax.fill_between(days, vals, vals[0], alpha=0.12, color=color)
-
-        # 경기국면 배경
-        for ph_i, (ph_name, mul) in enumerate(zip(phases, phase_muls)):
-            x0 = ph_i * phase_len
-            x1 = min((ph_i + 1) * phase_len, T)
-            bg = "#22c55e22" if mul > 0.8 else "#f59e0b22" if mul > 0 else "#ef444422"
-            ax.axvspan(x0, x1, color=bg, alpha=0.4)
-            ax.text((x0 + x1) / 2, ax.get_ylim()[0], ph_name,
-                    ha="center", va="bottom", fontsize=6, color=MUTED)
-
-        cur  = vals[-1]
-        chg  = (cur / vals[0] - 1) * 100
-        sign = "+" if chg >= 0 else ""
-        ax.set_title(f"{name}  현재: {cur:{cfg['fmt']}}  ({sign}{chg:.1f}%)",
-                     color=TEXT, fontsize=8.5, pad=5)
-        ax.tick_params(colors=TEXT, labelsize=7)
-        ax.spines[:].set_color(BORDER)
-        ax.set_xlim(0, T)
-
-        # 최고/최저 표시
-        hi, lo = np.argmax(vals), np.argmin(vals)
-        ax.annotate(f"고: {vals[hi]:{cfg['fmt']}}",
-                    xy=(hi, vals[hi]), xytext=(5, 5), textcoords="offset points",
-                    fontsize=6, color="#22c55e", arrowprops=dict(arrowstyle="->", color=MUTED, lw=0.5))
-        ax.annotate(f"저: {vals[lo]:{cfg['fmt']}}",
-                    xy=(lo, vals[lo]), xytext=(5, -12), textcoords="offset points",
-                    fontsize=6, color="#ef4444", arrowprops=dict(arrowstyle="->", color=MUTED, lw=0.5))
-
-    # 경기국면 범례 (우측 상단)
-    from matplotlib.patches import Patch
-    legend_els = [
-        Patch(facecolor="#22c55e44", label="상승기"),
-        Patch(facecolor="#f59e0b44", label="과열기"),
-        Patch(facecolor="#ef444444", label="침체기"),
-        Patch(facecolor="#22c55e44", label="회복기"),
-    ]
-    fig.legend(handles=legend_els, loc="upper right", fontsize=7,
-               facecolor=SURF, labelcolor=TEXT, framealpha=0.8, ncol=4,
-               bbox_to_anchor=(0.97, 0.995))
-
-    fig.suptitle(f"거시경제 시뮬레이션 대시보드 — {T}거래일 GBM 시뮬레이션",
-                 color=TEXT, fontsize=12, fontweight="bold", y=0.975)
-
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png", dpi=130, facecolor=DARK)
-    plt.close(fig)
-    buf.seek(0)
-    img_b64 = "data:image/png;base64," + base64.b64encode(buf.read()).decode()
+    # 원본 `ax.axvspan` 의 경계와 `bg` 판정을 그대로 옮긴다. 색은 화면이 고른다.
+    out_phases = []
+    for ph_i, (ph_name, mul) in enumerate(zip(phases, phase_muls)):
+        out_phases.append({
+            "name": ph_name,
+            "x0": ph_i * phase_len,
+            "x1": min((ph_i + 1) * phase_len, points),
+            "tone": "up" if mul > 0.8 else "warm" if mul > 0 else "down",
+        })
 
     summary = {name: {"start": round(float(v[0]), 2),
-                      "end":   round(float(v[-1]), 2),
-                      "chg_pct": round((v[-1]/v[0]-1)*100, 2)}
+                      "end":   round(float(v[points - 1]), 2),
+                      "chg_pct": round((v[points - 1]/v[0]-1)*100, 2)}
                for name, v in series_dict.items()}
 
-    return {"image": img_b64, "summary": summary, "n_days": T}
+    return {
+        "series": {"points": points, "indicators": out_indicators, "phases": out_phases},
+        "params": {"n_days": T, "seed": seed},
+        "summary": summary,
+        "n_days": T,
+    }
