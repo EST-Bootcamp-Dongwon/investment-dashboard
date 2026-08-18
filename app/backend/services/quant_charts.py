@@ -495,8 +495,31 @@ def financial_knowledge(*, n_simulations: int, risk_free: float) -> dict[str, ob
 
 
 def risk(*, confidence: float, n_scenarios: int, portfolio_value: float) -> dict[str, object]:
-    """VaR / CVaR 리스크 분석. `routers/quant.py:542~602` 그대로다."""
-    plt = charting.require_matplotlib()
+    """VaR / CVaR 리스크 분석.
+
+    ## 서버 렌더 PNG 에서 시리즈로 (2026-08-17)
+
+    `backtest()` 에 이어 두 번째다. **계산은 한 줄도 바뀌지 않았다** — `rng` 시드부터
+    `var_pct`·`cvar_pct` 까지 그대로고, 바뀐 것은 결과를 무엇으로 내보내는가 뿐이다.
+
+    | | 전 | 후 |
+    | --- | --- | --- |
+    | 응답 | `image` = PNG data URI **수십만 B** | `series` = 숫자 **약 1.1 KB** |
+    | 배포본 | matplotlib 이 없어 **503** | **200** |
+    | 상호작용 | 없음(그림) | 줌·툴팁 |
+
+    **`np.histogram` 은 새 계산이 아니다.** `Axes.hist(x, bins=80)` 이 `range=None`
+    일 때 내부에서 부르는 바로 그 함수다. 그림 안에 있던 수를 꺼낼 뿐이라 값이
+    달라질 여지가 없다. `edges[0]` 이 `daily_ret.min()*100` 과 같으므로 원본
+    `fill_betweenx` 의 왼쪽 끝값도 여기서 나온다.
+
+    **최상위 6키는 접지 않는다.** `backtest()` 는 지표를 `metrics` 로 접었지만,
+    이쪽은 `js/views/risk.js` 가 `data.var_pct` 처럼 **최상위에서** 읽고 `!= null`
+    가드까지 있어서, 접으면 지표 4칸이 **에러 없이 조용히** 전부 `—` 가 된다.
+
+    `bins=80` 이 상수라 응답 크기가 `n_scenarios` 와 무관하다 — 상한 10만에서도
+    1.2 KB 다. 원시 수익률을 그대로 실었다면 1 MB 였다.
+    """
     import numpy as np
 
     rng = np.random.default_rng(42)
@@ -509,38 +532,38 @@ def risk(*, confidence: float, n_scenarios: int, portfolio_value: float) -> dict
     var_amt = abs(var_pct) * portfolio_value
     cvar_amt = abs(cvar_pct) * portfolio_value
 
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5), facecolor=BACKGROUND)
-    text_c = TEXT; grid_c = GRID
+    # 원본 `ax.hist(daily_ret*100, bins=80, ...)` 이 내부에서 하던 그 계산이다.
+    counts, edges = np.histogram(daily_ret * 100, bins=80)
+    centers = (edges[:-1] + edges[1:]) / 2
 
-    ax = axes[0]; ax.set_facecolor(PANEL)
-    ax.hist(daily_ret * 100, bins=80, color="#3b82f6", alpha=0.75, edgecolor="none", label="수익률 분포")
-    ax.axvline(var_pct * 100, color="#f97316", lw=2, linestyle="--", label=f"VaR ({confidence:.0%}): {var_pct:.2%}")
-    ax.axvline(cvar_pct * 100, color="#ef4444", lw=2, linestyle="-", label=f"CVaR: {cvar_pct:.2%}")
-    ax.fill_betweenx([0, ax.get_ylim()[1] if ax.get_ylim()[1] > 0 else 500],
-                     daily_ret.min() * 100, var_pct * 100, color="#ef4444", alpha=0.15)
-    ax.set_xlabel("일간 수익률 (%)", color=text_c); ax.set_ylabel("빈도", color=text_c)
-    ax.set_title(f"수익률 분포 & VaR/CVaR ({confidence:.0%} 신뢰수준)", color=text_c, fontsize=11, fontweight="bold")
-    ax.legend(fontsize=8, labelcolor=text_c, facecolor=BACKGROUND)
-    ax.tick_params(colors=text_c); ax.spines[:].set_color(grid_c)
-    ax.grid(True, alpha=0.2, color=grid_c)
-
-    ax2 = axes[1]; ax2.set_facecolor(PANEL)
+    # 퍼센트 단위라 4자리로 자른다. 비율 6자리와 정밀도가 맞는다(`var_pct` 참조).
     labels = ["VaR 예상 손실", "CVaR 예상 손실", "포트폴리오 가치"]
     values = [var_amt / 1e6, cvar_amt / 1e6, portfolio_value / 1e6]
-    colors2 = ["#f97316", "#ef4444", "#22c55e"]
-    bars = ax2.barh(labels, values, color=colors2, alpha=0.85, edgecolor=grid_c)
-    for bar, val in zip(bars, values):
-        ax2.text(val + portfolio_value / 1e6 * 0.01, bar.get_y() + bar.get_height() / 2,
-                 f"{val:.1f}M", va="center", color=text_c, fontsize=10, fontweight="bold")
-    ax2.set_xlabel("금액 (백만원)", color=text_c)
-    ax2.set_title("리스크 금액 비교", color=text_c, fontsize=11, fontweight="bold")
-    ax2.tick_params(colors=text_c); ax2.spines[:].set_color(grid_c)
-    ax2.set_facecolor(PANEL); ax2.grid(True, alpha=0.2, color=grid_c, axis="x")
-
-    fig.patch.set_facecolor(BACKGROUND)
 
     return {
-        "image": _data_url(plt, fig),
+        "series": {
+            "bins": {
+                "centers": [round(float(v), 4) for v in centers],
+                "counts": [int(v) for v in counts],
+                "width": round(float(edges[1] - edges[0]), 4),
+                "x_min": round(float(edges[0]), 4),
+                "x_max": round(float(edges[-1]), 4),
+            },
+            "lines": {
+                "var_x": round(var_pct * 100, 4),
+                "cvar_x": round(cvar_pct * 100, 4),
+            },
+            # matplotlib `barh` 는 첫 항목을 맨 아래에 그린다. 뷰가 뒤집어 쓴다.
+            "amounts": [
+                {"label": lbl, "value_m": round(val, 2)}
+                for lbl, val in zip(labels, values)
+            ],
+        },
+        "params": {
+            "confidence": confidence,
+            "n_scenarios": n_scenarios,
+            "portfolio_value": portfolio_value,
+        },
         "var_pct": round(var_pct, 6),
         "cvar_pct": round(cvar_pct, 6),
         "var_amount": round(var_amt, 0),
