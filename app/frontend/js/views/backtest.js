@@ -37,7 +37,11 @@ const GRID = '#334155';
 function baseOptions(height) {
   return {
     chart: {
-      height, background: 'transparent', fontFamily: FONT,
+      // ⚠️ `'transparent'` 를 쓰면 안 된다. ApexCharts 3.54 는 그 값을 넘겨도
+      // `.apexcharts-canvas` 를 흰색으로 칠해, 어두운 패널 안에 흰 블록이 남는다
+      // (2026-08-17 브라우저 실측). 원본 matplotlib 의 어두운 배경을 지키려면
+      // 패널과 같은 색을 **명시**해야 한다.
+      height, background: PANEL, fontFamily: FONT,
       // 줌·팬이 이번 이전의 목적이다. 끄면 PNG 와 다를 것이 없다.
       toolbar: { show: true, tools: { download: false, pan: true, reset: true } },
       zoom: { enabled: true, type: 'x', autoScaleYaxis: true },
