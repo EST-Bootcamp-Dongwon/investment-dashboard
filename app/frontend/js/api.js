@@ -33,7 +33,8 @@
  *
  * ## 계약과의 관계
  *
- * `quant-contract/docs/contracts/api-contract.md` §8 이 이 파일의 규약이다.
+ * 원래 `quant-contract/docs/contracts/api-contract.md` §8 이 이 파일의 규약이었다.
+ * 그 저장소는 2026-09-15 제거돼 원문이 없다 — **이제 이 주석과 `toError()` 가 규약 정본이다.**
  * §8.4 가 정한 `new Error(err.detail || …)` 를 그대로 지키되 **두 가지를 더했다** —
  * 아래 `toError()` 의 주석에 이유가 있다.
  */

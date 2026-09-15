@@ -1,9 +1,11 @@
 ﻿# investment-dashboard — ADR 인덱스 (ADR-DB)
 
 파일명은 `NNNN-title.md`, 문서 내 참조 키는 `ADR-DB-NNNN`.
-전역 결정은 `../../../quant-contract/docs/decisions/` (ADR-CT-*)에 있다.
 
-**전역 ADR은 10개가 상한**이다. 넘어가면 통합·재분류 신호다(CONTEXT §6).
+> **2026-09-15 갱신** — 전역 ADR(`ADR-CT-*`)을 담던 `quant-contract` 는 서브모듈
+> 제거와 호스트 저장소 삭제로 더 이상 존재하지 않는다. 이 저장소의 `ADR-DB-*` 가
+> 이제 유일한 ADR 계열이다.
+
 모듈 국소 결정은 여기에 쌓는다.
 
 ## 목록
@@ -17,7 +19,7 @@
 | DB-0005 | BI 도구를 택1한다 (Power BI vs Tableau) | ☐ | 08 리서치 후 |
 
 > **DB-0003 은 폐기된 `ADR-PF-*` 스코프를 흡수한다.** `portfolio-service` 를 만들지
-> 않기로 했으므로 그 레포에 갈 예정이던 결정이 여기로 온다 (CONTEXT rev.7 §6).
+> 않기로 했으므로 그 레포에 갈 예정이던 결정이 여기로 온다.
 >
 > **BI 도구 택1은 0003 → 0005 로 밀렸다.** 번호 재사용이 아니다 — 그 자리표는
 > 실물 파일이 없는 예약이었고, CONTEXT rev.7 §6 이 0003·0004 를 각각

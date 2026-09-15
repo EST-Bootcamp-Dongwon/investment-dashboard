@@ -1,16 +1,23 @@
 # bi — BI 도구 산출물
 
 > ⚠️ **이건 서비스가 아니다.** Docker에도 Vercel에도 들어가지 않는다.
-> `factor-service`·`backtest-service`가 내보낸 **CSV 한 장을 읽는 별도 산출물**이다.
+> CSV 한 장을 읽는 별도 산출물이다.
 
 ## 계약
 
+**공급원이 없어졌다 (2026-09-15).** CSV 를 내보내기로 했던 `factor-service`·
+`backtest-service` 는 저장소를 만들지 않고 개발하지 않기로 하면서 제거됐다.
+
 ```
+(폐기된 계획)
 factor-service    GET /factors/eval/export?format=csv   → data/exports/factor_eval_*.csv
 backtest-service  GET /backtests/{run_id}/export        → data/exports/backtest_*.csv
-                                                            ↓
-                                                    BI 도구는 이것만 읽는다
 ```
+
+**입력 공급원 미정.** 이 저장소(`investment-dashboard`) 자체에는 현재 CSV 를
+내보내는 기능이 없다 — `POST /api/backtest-lab/report`(`app/backend/routers/backtest_lab.py:302`)는
+HTML 리포트를 반환할 뿐이다. BI 대시보드를 실제로 만들 때 CSV 내보내기를 이 저장소에
+새로 둘지 함께 정한다.
 
 BI 도구가 죽어도 서비스는 살아 있어야 한다. CI 독립성 원칙과 같은 논리다.
 

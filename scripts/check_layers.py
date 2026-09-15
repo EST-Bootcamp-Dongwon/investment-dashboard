@@ -28,7 +28,7 @@
 
 * `docs/spec/40-API/공통-응답과-에러.md` §9 조치 9번 — *"`api.js` 를 단일 창구로"* 를
   **축: 계층 분리** 로 이미 분류해 두었다.
-* `quant-contract/docs/contracts/api-contract.md` §8.1 — API 계약의 **선행 조건**으로
+* `quant-contract/docs/contracts/api-contract.md` §8.1(2026-09-15 저장소 제거로 원문 없음) — API 계약의 **선행 조건**으로
   이 검사를 지목했다. 받는 쪽이 8곳이면 계약이 강제되지 않기 때문이다.
 
 7번은 만들자마자 통과했다. 같은 날 오후에 회수를 먼저 끝냈기 때문이다
@@ -126,7 +126,7 @@ RULES = (
     #
     # ① `docs/spec/40-API/공통-응답과-에러.md` §9 조치 9번이 *"`api.js` 를 단일
     #    창구로"* 를 **축: 계층 분리 · 크기: 소** 로 이미 분류해 두었다. 축이 같다.
-    # ② `quant-contract/docs/contracts/api-contract.md` §8.1 이 계약의 선행 조건으로
+    # ② `quant-contract/docs/contracts/api-contract.md` §8.1(원문 삭제됨) 이 계약의 선행 조건으로
     #    *"강제 장치는 `check_layers.py` 에 「api.js 외 파일의 `fetch(` 금지」 검사를
     #    추가한다"* 를 지목했다.
     #

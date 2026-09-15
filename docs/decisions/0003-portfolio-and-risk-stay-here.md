@@ -4,6 +4,11 @@
 
 채택됨 (2026-08-17) — `ADR-PF-*` 스코프를 흡수한다
 
+> ⚠️ **2026-09-15 갱신** — `backtest-service`·`quant-core` 는 개발하지 않기로 해
+> 제거됐다. 이 ADR 이 이관 대상·역할 수행처로 지목한 부분(결정 3번,
+> "결과" 절의 `quant-core` 언급)은 폐기됐고, `Backtest.py`·`indicators.py` 는
+> 이 저장소에 남는다. 나머지 결정(1·2·4·5번)은 그대로 유효하다.
+
 ## 맥락
 
 CONTEXT rev.6 까지의 계획은 **`portfolio-service` 를 별도 레포로 신설**하고,
